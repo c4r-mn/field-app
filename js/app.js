@@ -868,17 +868,24 @@ function openDoor(id){
   var cf=document.getElementById('contact-fields');
   if(cf) cf.style.display='none';
   document.getElementById('door-name').value='';
+  var ln=document.getElementById('door-lastname'); if(ln) ln.value='';
   document.getElementById('door-phone').value='';
+  var de=document.getElementById('door-email'); if(de) de.value='';
+  var sb=document.getElementById('chk-stopby'); if(sb) sb.classList.remove('checked');
   document.getElementById('door-notes').value='';
   var log=logs[id];
   if(log){
     var cb=document.querySelector('.contact-btn[data-r="'+log.contact+'"]'); if(cb) cb.classList.add('active');
-    if(log.cardLeft) document.getElementById('chk-lit').classList.add('checked');
+    if(log.litLeft||log.cardLeft) document.getElementById('chk-lit').classList.add('checked'); // support both old+new
     if(log.wantContact){
       document.getElementById('chk-contact').classList.add('checked');
       var cf=document.getElementById('contact-fields');
       if(cf) cf.style.display='block';
+      var de=document.getElementById('door-email'); if(de) de.value=log.email||'';
+      var ll=document.getElementById('door-lastname'); if(ll) ll.value=log.lastname||'';
+      var sb=document.getElementById('chk-stopby'); if(sb&&log.stopBy) sb.classList.add('checked');
     }
+    if(log.wantSign&&document.getElementById('chk-sign')) document.getElementById('chk-sign').classList.add('checked');
     if(log.visitAgain) document.getElementById('chk-revisit').classList.add('checked');
     document.getElementById('door-name').value=log.name||'';
     document.getElementById('door-phone').value=log.phone||'';
@@ -904,11 +911,15 @@ function saveDoor(){
   var wantsContact=document.getElementById('chk-contact').classList.contains('checked');
   logs[modalId]={
     contact:ce.dataset.r,
-    cardLeft:document.getElementById('chk-lit').classList.contains('checked'),
+    litLeft:document.getElementById('chk-lit').classList.contains('checked'),
     wantContact:wantsContact,
+    wantSign:document.getElementById('chk-sign')?document.getElementById('chk-sign').classList.contains('checked'):false,
+    stopBy:wantsContact&&document.getElementById('chk-stopby')?document.getElementById('chk-stopby').classList.contains('checked'):false,
     visitAgain:document.getElementById('chk-revisit').classList.contains('checked'),
     name:wantsContact?document.getElementById('door-name').value.trim():'',
+    lastname:wantsContact&&document.getElementById('door-lastname')?document.getElementById('door-lastname').value.trim():'',
     phone:wantsContact?document.getElementById('door-phone').value.trim():'',
+    email:wantsContact&&document.getElementById('door-email')?document.getElementById('door-email').value.trim():'',
     notes:document.getElementById('door-notes').value.trim(),
     canvasser:myVolName+(partnerVolName?' & '+partnerVolName:''),
     volId:myVolId,
@@ -952,7 +963,7 @@ function renderLog(){
     var label=addr?addrLabel(addr):'Unknown';
     var color=CONTACT_COLORS[log.contact]||'#888';
     var time=new Date(log.time).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-    var flags=[log.cardLeft&&'📄 Card left',log.wantContact&&'📞 Wants contact',log.visitAgain&&'🔄 Visit again'].filter(Boolean).join(' · ');
+    var flags=[(log.litLeft||log.cardLeft)&&'📄 Lit left',log.wantContact&&(log.stopBy?'🚶 Stop by personally':'📞 Cassie to contact'),log.wantSign&&'🪧 Yard sign',log.visitAgain&&'🔄 Visit again'].filter(Boolean).join(' · ');
     return '<div class="log-item" data-aid="'+id+'" onclick="openDoor(this.dataset.aid)"><div class="log-header"><div class="log-addr">'+label+'</div><div class="log-badge" style="background:'+color+'22;color:'+color+';">'+log.contact+'</div></div><div class="log-meta">'+time+' \u00B7 '+log.canvasser+(log.interest?' \u00B7 \u2605'+log.interest:'')+'</div>'+(flags?'<div class="log-detail">'+flags+'</div>':'')+(log.notes?'<div class="log-detail">'+log.notes+'</div>':'')+'</div>';
   }).join('');
 }
@@ -966,7 +977,7 @@ function updateStats(){
 }
 
 function buildCSV(){
-  var rows=['Neighborhood,Address,Unit,Street,Property Type,Lat,Lng,Contact Result,Card Left,Wants Contact,Visit Again,Name,Phone/Email,Notes,Canvasser,Date,Time'];
+  var rows=['Neighborhood,Address,Unit,Street,Property Type,Lat,Lng,Contact Result,Lit Left,Cassie to Contact,Stop By,Wants Sign,Visit Again,First Name,Last Name,Phone,Email,Notes,Canvasser,Date,Time'];
   var hoodName=(window.NEIGHBORHOODS.find(function(n){return n.key===neighborhoodKey;})||{}).displayName||neighborhoodKey;
   addresses.forEach(function(addr){
     var log=logs[addr.id]; if(!log) return;
@@ -1280,5 +1291,3 @@ function formatDate(dateStr) {
 
 // ── BOOT ──────────────────────────────────
 // Boot handled by js/auth.js
-
-
