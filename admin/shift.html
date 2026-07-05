@@ -227,48 +227,17 @@ function loadCanvasserAssignment() {
 }
 
 
-function safeInitMap(containerId, callback) {
-  var el = document.getElementById(containerId);
-  if (!el) return;
-  // If already has dimensions, init immediately
-  if (el.offsetWidth > 0 && el.offsetHeight > 0) {
-    callback();
-    return;
-  }
-  // Otherwise wait for it to become visible
-  if (window.ResizeObserver) {
-    var ro = new ResizeObserver(function(entries) {
-      if (el.offsetWidth > 0 && el.offsetHeight > 0) {
-        ro.disconnect();
-        callback();
-      }
-    });
-    ro.observe(el);
-  } else {
-    // Fallback: poll
-    var tries = 0;
-    var interval = setInterval(function() {
-      if (el.offsetWidth > 0 && el.offsetHeight > 0 || tries++ > 20) {
-        clearInterval(interval);
-        if (el.offsetWidth > 0) callback();
-      }
-    }, 100);
-  }
-}
-
 function initShiftMap() {
-  safeInitMap('shift-map', function() {
-    shiftMap = L.map('shift-map').setView([45.017,-93.153],15);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-      attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
-    }).addTo(shiftMap);
+  shiftMap = L.map('shift-map').setView([45.017,-93.153],15);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
+  }).addTo(shiftMap);
   if (adminAddresses.length) {
     var lats=adminAddresses.map(function(a){return a.lat;});
     var lngs=adminAddresses.map(function(a){return a.lng;});
     shiftMap.fitBounds([[Math.min.apply(null,lats),Math.min.apply(null,lngs)],[Math.max.apply(null,lats),Math.max.apply(null,lngs)]],{padding:[20,20]});
   }
   refreshMapMarkers();
-  }); // end safeInitMap
 }
 
 function getSiblingUnits(id) {
