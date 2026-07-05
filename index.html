@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Cassie for Roseville — Field App</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen" style="position:fixed;inset:0;background:var(--cream);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;gap:14px;">
+  <div style="font-size:40px;">🌹</div>
+  <div style="font-size:24px;font-weight:800;color:var(--gold-acc);">Cassie for Roseville</div>
+  <div style="font-size:13px;color:var(--muted);max-width:300px;line-height:1.6;">Field Operations App</div>
+
+  <div style="width:100%;max-width:320px;display:flex;flex-direction:column;gap:10px;margin-top:8px;">
+    <button id="auth-btn-google" onclick="doGoogleLogin()"
+      style="width:100%;padding:12px;border:2px solid var(--border);border-radius:10px;background:var(--white);font-family:Outfit,sans-serif;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/><path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/><path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18z"/><path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/></svg>
+      Sign in with Google
+    </button>
+
+    <div style="display:flex;align-items:center;gap:8px;color:var(--subtle);font-size:12px;">
+      <div style="flex:1;height:1px;background:var(--border);"></div>
+      or
+      <div style="flex:1;height:1px;background:var(--border);"></div>
+    </div>
+
+    <input id="auth-email" type="email" placeholder="Email address"
+      style="width:100%;background:var(--white);border:2px solid var(--border);border-radius:10px;font-family:Outfit,sans-serif;font-size:14px;padding:12px 16px;outline:none;box-sizing:border-box;"
+      onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border)'">
+
+    <div style="position:relative;width:100%;">
+      <input id="auth-password" type="password" placeholder="Password"
+        style="width:100%;background:var(--white);border:2px solid var(--border);border-radius:10px;font-family:Outfit,sans-serif;font-size:14px;padding:12px 52px 12px 16px;outline:none;box-sizing:border-box;"
+        onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border)'">
+      <button id="pw-toggle" onclick="toggleAuthPwVisible()"
+        style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:12px;font-weight:700;color:var(--muted);font-family:Outfit,sans-serif;padding:4px 6px;">Show</button>
+    </div>
+
+    <button id="auth-btn-email" onclick="doEmailLogin()"
+      style="width:100%;padding:13px;border:none;border-radius:10px;background:var(--gold);color:var(--black);font-family:Outfit,sans-serif;font-size:15px;font-weight:800;cursor:pointer;">
+      Sign In
+    </button>
+  </div>
+
+  <div id="auth-error" style="font-size:12px;color:var(--red);font-weight:600;min-height:18px;max-width:300px;"></div>
+  <div style="font-size:11px;color:var(--subtle);margin-top:4px;">Cassie Iverson for Roseville City Council 2026</div>
+</div>
+
+
+<!-- CANVASSER SETUP -->
+<div id="setup-screen">
+  <div style="font-size:28px;">🌹</div>
+  <div style="font-size:18px;font-weight:800;color:var(--gold-acc);">Cassie for Roseville</div>
+  <div id="setup-loading" class="setup-loading">Loading roster…</div>
+  <div id="setup-fields" style="display:none;width:100%;max-width:340px;display:flex;flex-direction:column;align-items:center;gap:11px;">
+    <div class="setup-label">Your Name</div>
+    <select class="setup-select" id="setup-name" onchange="onSetupChange()">
+      <option value="">— Select your name —</option>
+    </select>
+  
+    <div class="setup-label">Neighborhood</div>
+    <select class="setup-select" id="setup-hood" onchange="onSetupChange()">
+      <option value="">— Select neighborhood —</option>
+    </select>
+    <div class="hood-note" id="hood-note" style="display:none;"></div>
+  </div>
+  <button id="setup-btn" disabled onclick="startApp()" style="width:100%;max-width:340px;">Start Canvassing</button>
+</div>
+
+<!-- ADMIN SCREEN -->
+<div id="admin-screen">
+  <div id="admin-topbar">
+    <div>
+      <div class="a-title">🌹 Admin — Cassie for Roseville</div>
+      <div class="a-sub" id="admin-topbar-sub">Field Operations Dashboard</div>
+    </div>
+    <button id="admin-back" onclick="goLogin()">← Exit</button>
+  </div>
+
+  <!-- MOBILE NAV STRIP -->
+  <div id="admin-mobile-nav">
+    <a href="#section-roster" class="amn-link">Roster</a>
+    <a href="#section-days" class="amn-link">Shifts</a>
+    <a href="#section-assign" class="amn-link">Assign</a>
+  </div>
+
+  <div id="admin-body">
+    <!-- LEFT RAIL -->
+    <div id="admin-rail">
+      <a href="#section-roster" class="rail-link">
+        <span class="rail-icon">👥</span>
+        <span>Roster</span>
+      </a>
+      <a href="#section-days" class="rail-link">
+        <span class="rail-icon">📅</span>
+        <span>Shifts</span>
+      </a>
+      <a href="#section-assign" class="rail-link">
+        <span class="rail-icon">🗺</span>
+        <span>Assign</span>
+      </a>
+    </div>
+
+    <!-- SCROLLING CONTENT -->
+    <div id="admin-content">
+
+      <!-- ── ROSTER ── -->
+      <div class="admin-section-page" id="section-roster">
+        <div class="asp-header">
+          <div class="asp-title">Volunteer Roster</div>
+          <div class="asp-sub">Add, edit, or deactivate team members. Deactivated volunteers keep their history.</div>
+        </div>
+        <div class="asp-body">
+          <div class="field-row">
+            <input class="a-input" id="new-vol-name" type="text" placeholder="New volunteer name…">
+            <button class="a-btn a-btn-gold" onclick="addVolunteer()">Add Volunteer</button>
+          </div>
+          <div id="roster-list" class="roster-list"></div>
+        </div>
+      </div>
+
+      <!-- ── SHIFTS ── -->
+      <div class="admin-section-page" id="section-days">
+        <div class="asp-header">
+          <div class="asp-title">Canvass Shifts</div>
+          <div class="asp-sub">Create and manage upcoming canvass days. Each shift has a neighborhood and a volunteer list.</div>
+        </div>
+        <div class="asp-body">
+          <div class="new-shift-form" id="new-shift-form">
+            <div class="nsf-title">New Shift</div>
+            <div class="field-row">
+              <div class="field-col">
+                <label class="a-label">Date</label>
+                <input class="a-input" id="new-day-date" type="date">
+              </div>
+              <div class="field-col">
+                <label class="a-label">Neighborhood</label>
+                <select class="a-input" id="new-day-hood">
+                  <option value="">— Select —</option>
+                </select>
+              </div>
+            </div>
+            <div style="margin-bottom:12px;">
+              <label class="a-label">Notes (optional)</label>
+              <input class="a-input" id="new-day-notes" type="text" placeholder="e.g. Rosefest followup">
+            </div>
+            <div style="margin-bottom:14px;">
+              <label class="a-label">Volunteers Coming</label>
+              <div id="new-day-volunteers" class="vol-check-grid"></div>
+            </div>
+            <button class="a-btn a-btn-gold" onclick="saveNewDay()">Create Shift</button>
+          </div>
+
+          <div class="days-divider">Scheduled Shifts</div>
+          <div id="days-list"></div>
+        </div>
+      </div>
+
+      <!-- ── ASSIGN ── -->
+      <div class="admin-section-page" id="section-assign">
+        <div class="asp-header">
+          <div class="asp-title">Assign Houses</div>
+          <div class="asp-sub">Select a shift and canvasser, then click addresses on the map or check them in the list.</div>
+        </div>
+        <div class="asp-body">
+          <div class="field-row" style="margin-bottom:14px;">
+            <div class="field-col">
+              <label class="a-label">Shift</label>
+              <select class="a-input" id="assign-day-select" onchange="onAssignDayChange()">
+                <option value="">— Select shift —</option>
+              </select>
+            </div>
+            <div class="field-col">
+              <label class="a-label">Canvasser</label>
+              <select class="a-input" id="admin-canvasser" onchange="onAdminCanvasserChange()">
+                <option value="">— Select canvasser —</option>
+              </select>
+            </div>
+            <div class="field-col">
+              <label class="a-label">Partner (optional)</label>
+              <select class="a-input" id="admin-partner" onchange="updateAdminSelLabel()">
+                <option value="">— No partner —</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- MAP VIEW TOGGLE -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div class="admin-map-toggle">
+              <div class="amt-btn active" data-mv="single" onclick="setAdminMapView('single')">This Person</div>
+              <div class="amt-btn" data-mv="all" onclick="setAdminMapView('all')">All Canvassers</div>
+            </div>
+            <div id="admin-all-legend" style="display:none;font-size:12px;"></div>
+          </div>
+
+          <!-- MAP -->
+          <div id="admin-map"></div>
+
+          <!-- CHECKLIST + ACTIONS -->
+          <div class="assign-bottom">
+            <div class="assign-status">
+              <span id="admin-sel-label">Select a shift and canvasser to begin</span>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="a-btn" id="admin-print-btn" onclick="printWalkSheet()" disabled
+                style="background:var(--white);border:1px solid var(--border);color:var(--muted);">🖨 Print Walk Sheet</button>
+              <button class="a-btn a-btn-gold" id="admin-save-btn" onclick="saveAssignments()" disabled>Save Assignments</button>
+            </div>
+          </div>
+
+          <div style="margin-top:12px;">
+            <div class="a-label" style="margin-bottom:6px;">Address Checklist</div>
+            <div id="admin-addr-list" class="admin-checklist"></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /admin-content -->
+  </div><!-- /admin-body -->
+</div><!-- /admin-screen -->
+
+
+<!-- CANVASSER APP -->
+<div id="app" style="display:none;">
+  <div id="topbar">
+    <div>
+      <div class="topbar-brand">🌹 Cassie for Roseville</div>
+      <div class="topbar-sub" id="topbar-sub">Field App</div>
+    </div>
+    <div id="mode-toggle" style="display:none;"></div>
+    <div id="user-badge" onclick="showUserMenu()">— ▾</div>
+  </div>
+  <div id="main">
+    <div id="map"></div>
+    <div id="map-legend">
+      <div class="legend-row"><div class="legend-dot" style="background:var(--gold);"></div>Your Assignment</div>
+      <div class="legend-row"><div class="legend-dot" style="background:var(--prop-house);"></div>House</div>
+      <div class="legend-row"><div class="legend-dot" style="background:var(--prop-senior);"></div>55+ (call first)</div>
+      <div class="legend-row"><div class="legend-dot" style="background:var(--prop-apartment);"></div>Apt (coordinate)</div>
+      <div class="legend-row"><div class="legend-dot" style="background:var(--prop-mobile);"></div>Mobile Home (coord.)</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#9ca3af;"></div>Logged</div>
+    </div>
+    <div id="sidebar">
+      <div id="tabs">
+        <div class="tab active" data-panel="addresses">My List</div>
+        <div class="tab" data-panel="all">All</div>
+        <div class="tab" data-panel="log">Log</div>
+        <div class="tab" data-panel="export">Summary</div>
+      </div>
+      <div class="panel active" id="panel-addresses"><div id="my-list-container"></div></div>
+      <div class="panel" id="panel-all">
+        <div id="filter-bar">
+          <input type="text" id="search-input" placeholder="Search addresses…" oninput="renderAllList()">
+          <div class="filter-chip active" data-f="all" onclick="setFilter('all')">All</div>
+          <div class="filter-chip" data-f="house" onclick="setFilter('house')">🏠 Houses</div>
+          <div class="filter-chip" data-f="apartment" onclick="setFilter('apartment')">🏢 Apts</div>
+          <div class="filter-chip" data-f="senior" onclick="setFilter('senior')">🏛 55+</div>
+          <div class="filter-chip" data-f="mobile" onclick="setFilter('mobile')">🏘 Mobile</div>
+        </div>
+        <div id="addr-list"></div>
+      </div>
+      <div class="panel" id="panel-log"><div id="log-list"></div></div>
+      <div class="panel" id="panel-export">
+        <div class="panel-inner">
+          <div class="section-label">Today's Results</div>
+          <div id="export-stats"></div>
+          <div class="section-label">Download</div>
+          <button class="btn btn-gold" onclick="exportCSV()">⬇ Download CSV</button>
+          <button class="btn btn-outline" onclick="copyCSV()">📋 Copy CSV</button>
+          <div class="section-label">Sync</div>
+          <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--light);border-radius:8px;margin-bottom:8px;">
+            <div style="width:8px;height:8px;border-radius:50%;background:#aaa;" id="fb-dot"></div>
+            <div style="font-size:12px;color:var(--muted);" id="fb-lbl">Connecting…</div>
+          </div>
+          <button class="btn btn-outline" onclick="initFirebase()">Reconnect</button>
+          <div class="section-label" style="margin-top:16px;">Reset</div>
+          <button class="btn btn-danger" onclick="confirmClear()">Clear My Results</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<button id="fab-toggle" onclick="toggleMobileView()">☰ List</button>
+
+<!-- USER MENU -->
+<div class="overlay" id="user-menu-overlay" onclick="bgClose(event,'user-menu-overlay')">
+  <div class="sheet" style="max-height:42vh;">
+    <div class="handle"></div>
+    <div class="sheet-title" id="user-menu-name" style="margin-bottom:16px;"></div>
+    <button class="btn btn-outline" onclick="closeOverlay('user-menu-overlay');goSetup();" style="margin-bottom:10px;">🔄 Switch Team Member</button>
+    <button class="btn btn-danger" onclick="closeOverlay('user-menu-overlay');saveAndExit();">💾 Save & Exit</button>
+  </div>
+</div>
+
+
+
+<!-- DOOR MODAL -->
+<div class="overlay" id="door-overlay" onclick="bgClose(event,'door-overlay')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="sheet-title" id="door-title"></div>
+    <div class="sheet-sub" id="door-sub"></div>
+    <div id="door-callout"></div>
+    <span class="field-label">Contact Result</span>
+    <div class="contact-grid">
+      <div class="contact-btn" data-r="Not Home" onclick="selContact(this)"><div class="cb-icon">🚪</div><div class="cb-label">Not Home</div></div>
+      <div class="contact-btn" data-r="Vacant" onclick="selContact(this)"><div class="cb-icon">🏚</div><div class="cb-label">Vacant</div></div>
+      <div class="contact-btn" data-r="For Sale" onclick="selContact(this)"><div class="cb-icon">🏷</div><div class="cb-label">For Sale</div></div>
+      <div class="contact-btn" data-r="No Soliciting" onclick="selContact(this)"><div class="cb-icon">🚫</div><div class="cb-label">No Soliciting</div></div>
+      <div class="contact-btn" data-r="Refused" onclick="selContact(this)"><div class="cb-icon">👎</div><div class="cb-label">Refused</div></div>
+      <div class="contact-btn" data-r="Accepted" onclick="selContact(this)"><div class="cb-icon">✅</div><div class="cb-label">Accepted</div></div>
+      <div class="contact-btn" data-r="Other Language" onclick="selContact(this)"><div class="cb-icon">🌐</div><div class="cb-label">Other Language</div></div>
+    </div>
+
+    <span class="field-label">Actions</span>
+    <div class="checks">
+      <div class="check-row" id="chk-lit" onclick="this.classList.toggle('checked')"><div class="check-box">✓</div><div class="check-label">📄 Card Left</div></div>
+      <div class="check-row" id="chk-contact" onclick="toggleWantsContact(this)"><div class="check-box">✓</div><div class="check-label">📞 Wants Contact</div></div>
+      <div class="check-row" id="chk-revisit" onclick="this.classList.toggle('checked')"><div class="check-box">✓</div><div class="check-label">🔄 Visit Again</div></div>
+    </div>
+    <div id="contact-fields" style="display:none;">
+      <span class="field-label">Name</span>
+      <input class="field-input" id="door-name" type="text" placeholder="First and last name…">
+      <span class="field-label">Phone / Email</span>
+      <input class="field-input" id="door-phone" type="text" placeholder="Phone or email…">
+    </div>
+    <span class="field-label">Notes</span>
+    <textarea class="field-input" id="door-notes" rows="2" placeholder="Anything worth noting…"></textarea>
+    <div class="sheet-actions">
+      <button class="btn btn-outline" onclick="closeOverlay('door-overlay')">Cancel</button>
+      <button class="btn btn-gold" onclick="saveDoor()">Save</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- SIGN MODAL -->
+<div class="overlay" id="sign-overlay" onclick="bgClose(event,'sign-overlay')">
+  <div class="sheet green-top">
+    <div class="handle"></div>
+    <div class="sheet-title" style="color:var(--green);">Log Yard Sign</div>
+    <div class="sheet-sub" id="sign-coords">Tap map to place</div>
+    <span class="field-label">Address / Location</span>
+    <input class="field-input" id="sign-addr" type="text" placeholder="e.g. 2440 Dunlap Street North">
+    <span class="field-label">Notes (optional)</span>
+    <input class="field-input" id="sign-notes" type="text" placeholder="Corner lot, by mailbox…">
+    <div class="sheet-actions">
+      <button class="btn btn-outline" onclick="closeOverlay('sign-overlay')">Cancel</button>
+      <button class="btn btn-green" onclick="saveSign()">Save Sign</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="js/data.js"></script>
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
+<script type="module" src="js/auth.js"></script>
+
+</body>
+</html>
