@@ -2008,11 +2008,10 @@ if (!window.C4R_CONFIG || !window.C4R_CONFIG.firebaseUrl) {
       '<div style="font-size:32px;margin-bottom:16px;">⚠️</div>' +
       '<div style="font-size:18px;font-weight:800;color:#c0392b;margin-bottom:8px;">Config missing</div>' +
       '<div style="font-size:13px;color:#6b6860;max-width:300px;line-height:1.6;">' +
-        'Make sure <strong>config.js</strong> is in the same folder as index.html and is not blocked by .gitignore.' +
+        'Make sure <strong>config.js</strong> is in the same folder as index.html.' +
       '</div></div>';
   }
-} else {
-  document.getElementById('pw-input').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
-  document.getElementById('pw-input').focus();
 }
+document.getElementById('pw-input').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
+document.getElementById('pw-input').focus();
 
