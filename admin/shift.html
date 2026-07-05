@@ -307,7 +307,24 @@ function renderCanvasserView(id) {
     listEl.innerHTML='<div style="padding:16px;color:var(--subtle);font-size:13px;">No addresses assigned.</div>';
   } else {
     var CONTACTS = ['Not Home','Vacant','For Sale','No Soliciting','Refused','Accepted','Other Language'];
-    listEl.innerHTML = route.map(function(addrId, i) {
+
+    // Expand route: if an address has sibling units, include all of them
+    var expandedRoute = [];
+    var seen = {};
+    route.forEach(function(addrId) {
+      var addr = addrMap[addrId];
+      if (!addr) { if(!seen[addrId]){ seen[addrId]=true; expandedRoute.push(addrId); } return; }
+      if (addr.u) {
+        // Find all units of this building
+        var siblings = adminAddresses.filter(function(a){ return a.n===addr.n && a.s===addr.s; })
+          .sort(function(a,b){ return (parseInt((a.u||'').replace(/\D/g,''))||0)-(parseInt((b.u||'').replace(/\D/g,''))||0); });
+        siblings.forEach(function(sib){ if(!seen[sib.id]){ seen[sib.id]=true; expandedRoute.push(sib.id); } });
+      } else {
+        if(!seen[addrId]){ seen[addrId]=true; expandedRoute.push(addrId); }
+      }
+    });
+
+    listEl.innerHTML = expandedRoute.map(function(addrId, i) {
       var addr = addrMap[addrId];
       if (!addr) return '';
       var log = volLogs[addrId];
@@ -328,6 +345,9 @@ function renderCanvasserView(id) {
           + '<input class="form-input log-name" data-addr-id="'+addrId+'" type="text" placeholder="First name" value="'+(log&&log.name?log.name:'')+'" style="font-size:11px;padding:4px 8px;width:110px;flex-shrink:0;">'
           + '<input class="form-input log-phone" data-addr-id="'+addrId+'" type="tel" placeholder="Phone" value="'+(log&&log.phone?log.phone:'')+'" style="font-size:11px;padding:4px 8px;width:110px;flex-shrink:0;">'
           + '<input class="form-input log-notes" data-addr-id="'+addrId+'" type="text" placeholder="Notes" value="'+(log&&log.notes?log.notes:'')+'" style="font-size:11px;padding:4px 8px;flex:1;min-width:120px;">'
+          + '<label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">'
+            + '<input type="checkbox" class="log-lit" data-addr-id="'+addrId+'"'+(log&&(log.litLeft||log.cardLeft)?' checked':'')+'>Lit Left'
+          + '</label>'
           + '<label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">'
             + '<input type="checkbox" class="log-sign" data-addr-id="'+addrId+'"'+(log&&log.wantSign?' checked':'')+'>🪧 Sign'
           + '</label>'
@@ -388,7 +408,18 @@ function renderShiftMap(route, addrMap, volLogs) {
       if (log.name) popup += '<br>'+log.name+(log.phone?' &middot; '+log.phone:'');
       if (log.notes) popup += '<br><em>'+log.notes+'</em>';
     }
-    var m = L.marker([addr.lat,addr.lng],{icon:icon}).bindPopup(popup).addTo(shiftMap);
+    var m = L.marker([addr.lat,addr.lng],{icon:icon}).addTo(shiftMap);
+    m.bindTooltip((i+1)+'. '+addr.n+' '+addr.s, {permanent:false});
+    m.on('click', function(){
+      // Scroll address list to this row and highlight it
+      var row = document.querySelector('.addr-log-row[data-addr-id="'+addrId+'"]');
+      if (row) {
+        row.scrollIntoView({behavior:'smooth', block:'center'});
+        row.style.background = '#fdf6e0';
+        row.style.transition = 'background .3s';
+        setTimeout(function(){ row.style.background = ''; }, 1500);
+      }
+    });
     mapMarkers[addrId]=m;
     bounds.push([addr.lat,addr.lng]);
   });
@@ -615,11 +646,13 @@ function saveAddrLog(addrId) {
   if (!contact || !contact.value) { showToast('Select a contact result first'); return; }
 
   var existing = (allLogs[currentCanvasserId]||{})[addrId] || {};
+  var litEl = document.querySelector('.log-lit[data-addr-id="'+addrId+'"]');
   var entry = Object.assign({}, existing, {
     contact: contact.value,
     name: name ? name.value.trim() : '',
     phone: phone ? phone.value.trim() : '',
     notes: notes ? notes.value.trim() : '',
+    litLeft: litEl ? litEl.checked : false,
     wantSign: sign ? sign.checked : false,
     wantContact: contactFlag ? contactFlag.checked : false,
     canvasser: currentCanvasserId,
