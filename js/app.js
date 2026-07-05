@@ -23,6 +23,608 @@ var isAdmin = false;
 var fbConnected = false;
 var fbBase = '';
 // fbBase gets set when auth completes (see initFirebaseAdmin / initFirebaseCanvasser)
+
+// ── FIREBASE INIT ─────────────────────────────────────────────────────────
+function initFirebaseAdmin() {
+  setFbBase();
+  fbGet('/.json?shallow=true')
+    .then(function(){
+      fbConnected = true;
+      loadRoster().then(function(){
+        loadCanvassDays().then(function(){
+          showAdminScreen();
+        });
+      });
+    })
+    .catch(function(){ showToast('Firebase offline — check connection'); showAdminScreen(); });
+}
+
+function initFirebaseCanvasser() {
+  setFbBase();
+  document.getElementById('setup-screen').style.display='flex';
+  document.getElementById('setup-loading').style.display='block';
+  document.getElementById('setup-fields').style.display='none';
+  document.getElementById('setup-btn').disabled = true;
+
+  fbGet('/.json?shallow=true')
+    .then(function(){
+      fbConnected = true;
+      return loadRoster();
+    })
+    .then(function(){
+      document.getElementById('setup-loading').style.display='none';
+      document.getElementById('setup-fields').style.display='flex';
+      buildSetupSelects();
+    })
+    .catch(function(){
+      document.getElementById('setup-loading').textContent='Could not load roster — check connection.';
+    });
+}
+
+
+function initFirebase() {
+  // Called from canvasser app to reconnect
+  fbGet('/.json?shallow=true')
+    .then(function(){
+      fbConnected=true;
+      var dot=document.getElementById('fb-dot'), lbl=document.getElementById('fb-lbl');
+      if(dot) dot.style.background='#27ae60';
+      if(lbl) lbl.textContent='Syncing live';
+      if(pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(pullCanvasserData, 15000);
+      pullCanvasserData();
+    })
+    .catch(function(){
+      var dot=document.getElementById('fb-dot'), lbl=document.getElementById('fb-lbl');
+      if(dot) dot.style.background='#c0392b';
+      if(lbl) lbl.textContent='Offline — saving locally';
+    });
+}
+
+// ── ROSTER ────────────────────────────────
+function loadRoster() {
+  return fbGet('/roster').then(function(d){
+    if (d && typeof d==='object' && Object.keys(d).length > 0) {
+      roster = d;
+    } else {
+      // First run — seed from INITIAL_ROSTER
+      roster = {};
+      var promises = INITIAL_ROSTER.map(function(v){
+        var id = genId();
+        roster[id] = {name:v.name, status:v.status, added:todayKey};
+        return fbPut('/roster/'+id, roster[id]);
+      });
+      return Promise.all(promises);
+    }
+  }).catch(function(){ roster = {}; });
+}
+
+function loadCanvassDays() {
+  return fbGet('/canvass-days').then(function(d){
+    canvassDays = (d && typeof d==='object') ? d : {};
+  }).catch(function(){ canvassDays = {}; });
+}
+
+// ── ROSTER MANAGEMENT ─────────────────────
+function showAdminScreen() {
+  document.getElementById('admin-screen').style.display='flex';
+  buildNewDayHoodSelect();
+  renderNewDayVolunteers();
+  renderRoster();
+  renderDaysList();
+  buildAssignDaySelect();
+  buildAssignCanvasserSelect();
+  setTimeout(function(){ if(!adminMap) initAdminMap(); }, 300);
+  setupRailHighlight();
+}
+
+function setupRailHighlight() {
+  var content = document.getElementById('admin-content');
+  if (!content) return;
+  var sections = ['section-roster','section-days','section-assign'];
+  content.addEventListener('scroll', function() {
+    var scrollTop = content.scrollTop + 80;
+    var active = sections[0];
+    sections.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el && el.offsetTop <= scrollTop) active = id;
+    });
+    document.querySelectorAll('.rail-link').forEach(function(a) {
+      a.classList.toggle('active', a.getAttribute('href') === '#'+active);
+    });
+    // Init map when assign section scrolls into view
+    if (active === 'section-assign' && !adminMap) {
+      setTimeout(function() { initAdminMap(); }, 100);
+    }
+  });
+  var first = document.querySelector('.rail-link');
+  if (first) first.classList.add('active');
+}
+
+function renderRoster() {
+  var list = document.getElementById('roster-list');
+  if (!list) return;
+  var vols = Object.entries(roster).sort(function(a,b){return a[1].name.localeCompare(b[1].name);});
+  if (!vols.length) {
+    list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--subtle);font-size:13px;">No volunteers yet.</div>';
+    return;
+  }
+  list.innerHTML = vols.map(function(pair){
+    var id = pair[0], v = pair[1];
+    var inactive = v.status === 'inactive';
+    return '<div class="roster-item' + (inactive ? ' inactive' : '') + '" id="ri-' + id + '">' +
+      '<div class="roster-avatar' + (inactive ? ' inactive-av' : '') + '">' + v.name.charAt(0).toUpperCase() + '</div>' +
+      '<div class="roster-info">' +
+        '<div class="roster-name" id="rn-' + id + '">' + v.name + '</div>' +
+        '<div class="roster-status">' + (inactive ? 'Inactive' : 'Active') + '</div>' +
+      '</div>' +
+      '<div class="roster-actions" id="ra-' + id + '">' +
+        '<button class="r-btn" data-id="' + id + '" onclick="startEditVol(this.dataset.id)">Edit</button>' +
+        '<button class="r-btn r-danger" data-id="' + id + '" onclick="handleToggleVol(this.dataset.id)">' + (inactive ? 'Reactivate' : 'Deactivate') + '</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function startEditVol(id) {
+  var v = roster[id]; if (!v) return;
+  var nameEl = document.getElementById('rn-' + id);
+  var actionsEl = document.getElementById('ra-' + id);
+  if (!nameEl || !actionsEl) return;
+  nameEl.innerHTML = '<input class="roster-edit-input" id="rei-' + id + '" type="text" value="' + v.name.replace(/"/g,'&quot;') + '">';
+  actionsEl.innerHTML =
+    '<button class="r-btn r-save" data-id="' + id + '" onclick="saveInlineEdit(this.dataset.id)">Save</button>' +
+    '<button class="r-btn r-cancel" onclick="renderRoster()">Cancel</button>';
+  var inp = document.getElementById('rei-' + id);
+  if (inp) { inp.focus(); inp.select(); }
+}
+
+function saveInlineEdit(id) {
+  var inp = document.getElementById('rei-' + id);
+  if (!inp) return;
+  var newName = inp.value.trim();
+  if (!newName) { showToast('Name cannot be empty'); return; }
+  var oldName = roster[id] ? roster[id].name : '';
+  roster[id].name = newName;
+  fbPatch('/roster/' + id, {name: newName}).then(function(){
+    return updateVolNameInLogs(id, oldName, newName);
+  }).then(function(){
+    renderRoster();
+    buildAssignCanvasserSelect();
+    showToast('Updated to ' + newName);
+  }).catch(function(err){
+    showToast('Save failed: ' + (err && err.message ? err.message : 'check connection'));
+    console.error('saveAssignments error:', err);
+  });
+}
+
+
+function addVolunteer() {
+  var input = document.getElementById('new-vol-name');
+  var name = input.value.trim();
+  if (!name) return;
+  var id = genId();
+  roster[id] = {name:name, status:'active', added:todayKey};
+  fbPut('/roster/'+id, roster[id]).then(function(){
+    input.value='';
+    renderRoster();
+    buildAssignCanvasserSelect();
+    showToast('Added '+name);
+  }).catch(function(err){
+    showToast('Save failed: ' + (err && err.message ? err.message : 'check connection'));
+    console.error('saveAssignments error:', err);
+  });
+}
+
+// openEditVol/saveVolunteerEdit replaced by startEditVol inline
+
+function updateVolNameInLogs(volId, oldName, newName) {
+  // Fetch all logs, find entries with canvasser matching oldName, update them
+  return fbGet('/').then(function(allData){
+    if (!allData) return;
+    var updates = {};
+    CONFIG.neighborhoods.forEach(function(n){
+      var hoodData = allData[n.key];
+      if (!hoodData || !hoodData.logs) return;
+      Object.entries(hoodData.logs).forEach(function(dayPair){
+        var date=dayPair[0], dayLogs=dayPair[1];
+        if (!dayLogs) return;
+        Object.entries(dayLogs).forEach(function(volPair){
+          var vKey=volPair[0], vLogs=volPair[1];
+          if (!vLogs) return;
+          Object.entries(vLogs).forEach(function(logPair){
+            var addrId=logPair[0], log=logPair[1];
+            if (log && log.canvasser && log.canvasser.indexOf(oldName) !== -1) {
+              var updated = log.canvasser.replace(new RegExp(oldName,'g'), newName);
+              updates['/'+n.key+'/logs/'+date+'/'+vKey+'/'+addrId+'/canvasser'] = updated;
+            }
+          });
+        });
+      });
+    });
+    if (Object.keys(updates).length) {
+      return fbPatch('', updates);
+    }
+  });
+}
+
+function handleToggleVol(id){var v=roster[id];toggleVolStatus(id,v&&v.status==='inactive');}
+function toggleVolStatus(id, isInactive) {
+  var newStatus = isInactive ? 'active' : 'inactive';
+  var v = roster[id];
+  if (!v) return;
+  if (!isInactive && !confirm('Deactivate '+v.name+'? They will not appear in future shift selectors. Their past data is preserved.')) return;
+  roster[id].status = newStatus;
+  fbPatch('/roster/'+id, {status:newStatus}).then(function(){
+    renderRoster();
+    showToast(v.name + (newStatus==='inactive' ? ' deactivated' : ' reactivated'));
+  }).catch(function(err){
+    showToast('Save failed: ' + (err && err.message ? err.message : 'check connection'));
+    console.error('saveAssignments error:', err);
+  });
+}
+
+// ── CANVASS DAYS ──────────────────────────
+function renderDaysList() {
+  var list = document.getElementById('days-list');
+  if (!list) return;
+  var days = Object.entries(canvassDays).sort(function(a,b){return a[0].localeCompare(b[0]);});
+  if (!days.length) {
+    list.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--subtle);">No shifts yet. Create one above.</div>';
+    return;
+  }
+  var upcoming = days.filter(function(p){return p[0]>=todayKey;});
+  var past = days.filter(function(p){return p[0]<todayKey;}).reverse();
+
+  function dayCard(pair, isPast) {
+    var date=pair[0], day=pair[1];
+    var hood = CONFIG.neighborhoods.find(function(n){return n.key===day.neighborhood;});
+    var hoodName = hood ? hood.displayName : day.neighborhood;
+    var vols = (day.volunteers||[]).map(volName);
+    return '<div class="day-item' + (isPast?' past-day':'') + '">' +
+      '<div class="day-item-header">' +
+        '<div>' +
+          '<div class="day-date">' + formatDate(date) + (isPast?' <span style="font-size:9px;color:var(--subtle);font-weight:400;">(past)</span>':'') + '</div>' +
+          '<div class="day-meta">' + hoodName + (day.notes ? ' · ' + day.notes : '') + '</div>' +
+        '</div>' +
+        '<div class="day-actions">' +
+          '<button class="r-btn" data-date="' + date + '" onclick="jumpToAssign(this.dataset.date)">View / Assign →</button>' +
+          '<button class="r-btn r-danger" data-date="' + date + '" onclick="deleteDay(this.dataset.date)">Delete</button>' +
+        '</div>' +
+      '</div>' +
+      (vols.length ? '<div class="day-volunteers">' + vols.map(function(n){return '<span class="day-vol-pill">'+n+'</span>';}).join('') + '</div>' : '') +
+    '</div>';
+  }
+
+  var html = '';
+  if (upcoming.length) {
+    html += '<div class="days-divider">Upcoming</div>';
+    html += upcoming.map(function(p){return dayCard(p,false);}).join('');
+  }
+  if (past.length) {
+    html += '<div class="days-divider" style="margin-top:16px;">Past Shifts</div>';
+    html += past.map(function(p){return dayCard(p,true);}).join('');
+  }
+  list.innerHTML = html;
+}
+
+
+function buildAssignDaySelect() {
+  var sel = document.getElementById('assign-day-select');
+  if (!sel) return;
+  var prev = sel.value;
+  sel.innerHTML = '<option value="">— Select a shift —</option>';
+  Object.keys(canvassDays).sort().forEach(function(date){
+    var o=document.createElement('option'); o.value=date; o.textContent=formatDate(date);
+    if(date===prev) o.selected=true;
+    sel.appendChild(o);
+  });
+}
+
+function setAssignDay(date) {
+  var sel = document.getElementById('assign-day-select');
+  if (sel) { sel.value = date; onAssignDayChange(); }
+}
+
+function jumpToAssign(date) {
+  setAssignDay(date);
+  var el = document.getElementById('section-assign');
+  if (el) el.scrollIntoView({behavior:'smooth'});
+}
+
+function onAssignDayChange() {
+  var date = document.getElementById('assign-day-select').value;
+  adminCurrentDay = date;
+  adminSelected = {}; adminRoute = [];
+  buildAssignCanvasserSelect();
+  if (date && canvassDays[date]) {
+    var hood = canvassDays[date].neighborhood;
+    adminHoodKey = hood;
+    adminAddresses = NEIGHBORHOOD_DATA[hood] || [];
+    refreshAdminMarkers();
+    if (adminMap && adminAddresses.length) {
+      var lats=adminAddresses.map(function(a){return a.lat;});
+      var lngs=adminAddresses.map(function(a){return a.lng;});
+      adminMap.fitBounds([[Math.min.apply(null,lats),Math.min.apply(null,lngs)],[Math.max.apply(null,lats),Math.max.apply(null,lngs)]],{padding:[20,20]});
+    }
+    // Load all assignments for this day
+    fbGet('/'+adminHoodKey+'/assignments/'+date).then(function(d){
+      adminAllData = (d&&typeof d==='object') ? d : {};
+      if (adminMapView==='all') refreshAdminMarkers();
+      updateAllLegend();
+    }).catch(function(){});
+    // Auto-select canvasser if only one on this shift
+    var vols = canvassDays[date].volunteers || [];
+    var cvSel = document.getElementById('admin-canvasser');
+    if (cvSel && vols.length === 1) {
+      cvSel.value = vols[0];
+      onAdminCanvasserChange();
+      return; // onAdminCanvasserChange handles render
+    }
+  }
+  renderAdminAddrList();
+  updateAdminSelLabel();
+}
+
+function buildAssignCanvasserSelect() {
+  var sel = document.getElementById('admin-canvasser');
+  var psel = document.getElementById('admin-partner');
+  if (!sel) return;
+  var prevC = adminVolId, prevP = psel ? psel.value : '';
+  sel.innerHTML = '<option value="">— Select canvasser —</option>';
+  if (psel) psel.innerHTML = '<option value="">— No partner —</option>';
+  var day = adminCurrentDay ? canvassDays[adminCurrentDay] : null;
+  var vols = day && day.volunteers ? day.volunteers.map(function(id){return {id:id,name:volName(id)};}) : activeVols();
+  vols.forEach(function(v){
+    var o=document.createElement('option'); o.value=v.id; o.textContent=v.name;
+    if(v.id===prevC) o.selected=true;
+    sel.appendChild(o);
+    if (psel) {
+      var o2=document.createElement('option'); o2.value=v.id; o2.textContent=v.name;
+      if(v.id===prevP) o2.selected=true;
+      psel.appendChild(o2);
+    }
+  });
+}
+
+function onAdminCanvasserChange() {
+  adminVolId = document.getElementById('admin-canvasser').value;
+  adminSelected = {}; adminRoute = [];
+  if (adminVolId && adminCurrentDay && adminHoodKey) {
+    fbGet('/'+adminHoodKey+'/assignments/'+adminCurrentDay+'/'+adminVolId).then(function(d){
+      if (d && typeof d==='object') {
+        if (Array.isArray(d.route)) {
+          adminRoute = d.route;
+          adminSelected = d.assignments || {};
+        } else {
+          // Legacy flat format
+          adminSelected = {};
+          adminRoute = [];
+          Object.keys(d).forEach(function(k){
+            if(k!=='route'&&k!=='assignments'){
+              adminSelected[k]=true;
+              adminRoute.push(k);
+            }
+          });
+        }
+        showToast('Loaded ' + adminRoute.length + ' addresses for ' + volName(adminVolId));
+      } else {
+        adminSelected = {}; adminRoute = [];
+      }
+      refreshAdminMarkers();
+      renderAdminAddrList();
+      updateAdminSelLabel();
+    }).catch(function(e){
+      showToast('Load failed — check connection');
+      renderAdminAddrList();
+      updateAdminSelLabel();
+    });
+  } else {
+    refreshAdminMarkers();
+    renderAdminAddrList();
+    updateAdminSelLabel();
+  }
+}
+
+function saveAssignments() {
+  if (!adminVolId) { showToast('Select a canvasser first'); return; }
+  if (!adminCurrentDay) { showToast('Select a shift first'); return; }
+  if (!adminHoodKey) { showToast('No neighborhood set — pick a shift first'); return; }
+  if (adminRoute.length === 0) { showToast('No addresses selected'); return; }
+  var psel = document.getElementById('admin-partner');
+  var partnerId = psel ? psel.value : '';
+  var saves = [fbPut('/'+adminHoodKey+'/assignments/'+adminCurrentDay+'/'+adminVolId, {route:adminRoute,assignments:adminSelected})];
+  if (partnerId && partnerId !== adminVolId) {
+    saves.push(fbPut('/'+adminHoodKey+'/assignments/'+adminCurrentDay+'/'+partnerId, {route:adminRoute,assignments:adminSelected}));
+  }
+  Promise.all(saves).then(function(){
+    var names = volName(adminVolId)+(partnerId&&partnerId!==adminVolId?' & '+volName(partnerId):'');
+    showToast('Saved '+adminRoute.length+' addresses for '+names);
+    fbGet('/'+adminHoodKey+'/assignments/'+adminCurrentDay).then(function(d){
+      adminAllData=(d&&typeof d==='object')?d:{};
+      updateAllLegend();
+    });
+  }).catch(function(err){
+    showToast('Save failed: ' + (err && err.message ? err.message : 'check connection'));
+    console.error('saveAssignments error:', err);
+  });
+}
+
+// ── ADMIN MAP ─────────────────────────────
+function initAdminMap() {
+  adminMap = L.map('admin-map', {center:[45.017,-93.153], zoom:15});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
+  }).addTo(adminMap);
+
+  // Selection via map pin clicks and checklist only
+}
+function adminMarkerColor(addr) {
+  if (adminMapView==='all') {
+    var keys=Object.keys(adminAllData);
+    for(var i=0;i<keys.length;i++){
+      if(adminAllData[keys[i]]&&adminAllData[keys[i]][addr.id]) return CANVASSER_COLORS[i%CANVASSER_COLORS.length];
+    }
+    return '#d1d5db';
+  }
+  if (adminSelected[addr.id]) return '#D4A832';
+  return (PROP_META[addr.t]||PROP_META.house).color;
+}
+
+function refreshAdminMarkers() {
+  if (!adminMap) return;
+  Object.values(adminMarkers).forEach(function(m){adminMap.removeLayer(m);});
+  adminMarkers={};
+  adminAddresses.forEach(function(addr){
+    var color=adminMarkerColor(addr);
+    var sel=!!adminSelected[addr.id];
+    var size=sel?14:9; var op=(sel||adminMapView==='all')?1:.45;
+    var routeIdx = adminRoute.indexOf(addr.id);
+    var pinNum = (sel && routeIdx >= 0) ? (routeIdx+1) : '';
+    var pinSize = sel ? 20 : size;
+    var icon=L.divIcon({className:'',html:'<div style="width:'+pinSize+'px;height:'+pinSize+'px;background:'+color+';border:'+(sel?'2px solid rgba(0,0,0,.3)':'1.5px solid rgba(0,0,0,.1)')+';border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.2);cursor:pointer;opacity:'+op+';display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:#1d1b16;">'+pinNum+'</div>',iconSize:[pinSize,pinSize],iconAnchor:[pinSize/2,pinSize/2]});
+    var m=L.marker([addr.lat,addr.lng],{icon:icon}).addTo(adminMap);
+    var addrId=addr.id;
+    m.on('click',function(){
+      if(!adminVolId){showToast('Select a canvasser first');return;}
+      toggleAdminAddr(addrId);
+    });
+    m.bindTooltip(addr.n+' '+addr.s,{permanent:false,direction:'top'});
+    adminMarkers[addr.id]=m;
+  });
+}
+
+function renderAdminAddrList() {
+  var container = document.getElementById('admin-addr-list');
+  if (!adminAddresses.length) {
+    container.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--subtle);text-align:center;">Select a shift first</div>';
+    return;
+  }
+  var addrMap = {};
+  adminAddresses.forEach(function(a){ addrMap[a.id]=a; });
+
+  var routeHtml = adminRoute.map(function(id, i) {
+    var addr = addrMap[id]; if (!addr) return '';
+    var meta = PROP_META[addr.t]||PROP_META.house;
+    var isFirst = i===0, isLast = i===adminRoute.length-1;
+    return '<div class="admin-addr-list-item sel" style="border-left:3px solid var(--gold);min-height:44px;align-items:center;">' +
+      '<div style="display:flex;flex-direction:column;gap:2px;align-items:center;justify-content:center;width:24px;flex-shrink:0;">' +
+        '<button data-rid="'+id+'" data-dir="-1" onclick="moveRouteItem(this.dataset.rid,parseInt(this.dataset.dir))" '+(isFirst?'disabled':'')+
+          ' style="border:none;background:none;cursor:pointer;color:'+(isFirst?'#ddd':'var(--gold-acc)')+';font-size:14px;padding:2px;line-height:1;display:block;">▲</button>' +
+        '<button data-rid="'+id+'" data-dir="1" onclick="moveRouteItem(this.dataset.rid,parseInt(this.dataset.dir))" '+(isLast?'disabled':'')+
+          ' style="border:none;background:none;cursor:pointer;color:'+(isLast?'#ddd':'var(--gold-acc)')+';font-size:14px;padding:2px;line-height:1;display:block;">▼</button>' +
+      '</div>' +
+      '<div class="aali-check" data-aid="'+id+'" onclick="toggleAdminAddr(this.dataset.aid)" style="margin:0 6px;">✓</div>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+          '<span style="color:var(--gold-acc);margin-right:4px;">'+(i+1)+'.</span>'+addr.n+' '+addr.s+(addr.u?', '+addr.u:'')+'</div>' +
+        '<div style="font-size:10px;color:var(--subtle);">'+meta.label+'</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  var unselected = adminAddresses
+    .filter(function(a){ return !adminSelected[a.id]; })
+    .sort(function(a,b){ return parseInt(a.n||0)-parseInt(b.n||0); });
+
+  var unselHtml = unselected.map(function(addr) {
+    var meta = PROP_META[addr.t]||PROP_META.house;
+    return '<div class="admin-addr-list-item" data-aid="'+addr.id+'" onclick="toggleAdminAddr(this.dataset.aid)" style="min-height:44px;align-items:center;">' +
+      '<div class="aali-check" style="margin-right:6px;"></div>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+addr.n+' '+addr.s+(addr.u?', '+addr.u:'')+'</div>' +
+        '<div style="font-size:10px;color:var(--subtle);">'+meta.label+'</div>' +
+      '</div></div>';
+  }).join('');
+
+  var divider = (adminRoute.length && unselected.length) ?
+    '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--subtle);padding:6px 10px;background:var(--light);">— Not yet added —</div>' : '';
+
+  container.innerHTML = routeHtml + divider + unselHtml;
+}
+
+function getSiblingUnits(id) {
+  // Return all address IDs that share the same street number and street name
+  var addr = adminAddresses.find(function(a){return a.id===id;});
+  if (!addr || !addr.u) return [id]; // no unit field = standalone house
+  return adminAddresses
+    .filter(function(a){ return a.n===addr.n && a.s===addr.s; })
+    .map(function(a){ return a.id; })
+    .sort(function(a,b){
+      var au = adminAddresses.find(function(x){return x.id===a;});
+      var bu = adminAddresses.find(function(x){return x.id===b;});
+      var an = parseInt((au&&au.u||'').replace(/\D/g,''))||0;
+      var bn = parseInt((bu&&bu.u||'').replace(/\D/g,''))||0;
+      return an - bn;
+    });
+}
+
+function toggleAdminAddr(id) {
+  if(!adminVolId){showToast('Select a canvasser first');return;}
+  var siblings = getSiblingUnits(id);
+  if(adminSelected[id]) {
+    // Deselect all siblings
+    siblings.forEach(function(sid){
+      delete adminSelected[sid];
+      adminRoute = adminRoute.filter(function(rid){return rid!==sid;});
+    });
+  } else {
+    // Select all siblings in unit order
+    siblings.forEach(function(sid){
+      if(!adminSelected[sid]){
+        adminSelected[sid] = true;
+        adminRoute.push(sid);
+      }
+    });
+  }
+  refreshAdminMarkers(); renderAdminAddrList(); updateAdminSelLabel();
+}
+
+function moveRouteItem(id, dir) {
+  var i = adminRoute.indexOf(id);
+  if (i === -1) return;
+  var j = i + dir;
+  if (j < 0 || j >= adminRoute.length) return;
+  var tmp = adminRoute[i]; adminRoute[i] = adminRoute[j]; adminRoute[j] = tmp;
+  refreshAdminMarkers(); renderAdminAddrList();
+}
+
+function updateAdminSelLabel() {
+  var n=adminRoute.length;
+  var psel=document.getElementById('admin-partner');
+  var partnerId=psel?psel.value:'';
+  var label='';
+  if(!adminCurrentDay) label='Select a shift to begin';
+  else if(!adminVolId) label='Select a canvasser';
+  else {
+    var names=volName(adminVolId)+(partnerId&&partnerId!==adminVolId?' & '+volName(partnerId):'');
+    label=n+' address'+(n===1?'':'es')+' selected for '+names;
+  }
+  document.getElementById('admin-sel-label').textContent=label;
+  var canAct = !!(adminVolId && adminCurrentDay && adminHoodKey);
+  document.getElementById('admin-save-btn').disabled = !canAct;
+  var printBtn = document.getElementById('admin-print-btn');
+  if (printBtn) printBtn.disabled = !(canAct && adminRoute.length > 0);
+}
+
+function setAdminMapView(v){
+  adminMapView=v;
+  document.querySelectorAll('.amt-btn').forEach(function(b){b.classList.toggle('active',b.dataset.mv===v);});
+  document.getElementById('admin-all-legend').style.display=v==='all'?'block':'none';
+  refreshAdminMarkers();
+}
+
+function updateAllLegend(){
+  var rows=document.getElementById('admin-all-legend'); if(!rows) return;
+  var keys=Object.keys(adminAllData);
+  if(!keys.length){rows.innerHTML='<div style="font-size:12px;color:var(--subtle);padding:4px 0;">No assignments saved yet.</div>';return;}
+  rows.innerHTML=keys.map(function(id,i){
+    var count=adminAllData[id]?Object.keys(adminAllData[id]).length:0;
+    return '<div class="all-legend-row"><div class="alr-dot" style="background:'+CANVASSER_COLORS[i%CANVASSER_COLORS.length]+';"></div><span class="alr-name">'+volName(id)+'</span><span class="alr-count">'+count+'</span></div>';
+  }).join('');
+}
+
+
 function setFbBase() {
   fbBase = (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.databaseURL) || '';
 }
