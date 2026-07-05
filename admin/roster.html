@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Roster — Cassie for Roseville Field App</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/app.css">
+</head>
+<body>
+
+<div id="user-bar">
+  <span id="user-bar-name"></span>
+  <div class="user-bar-right">
+    <button class="signout-btn" onclick="doSignOut()">Sign Out</button>
+  </div>
+</div>
+
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <div class="admin-sidebar-brand">
+      <div class="brand-name">🌹 Cassie for Roseville</div>
+      <div class="brand-sub">Field Operations Admin</div>
+    </div>
+    <nav class="admin-nav">
+      <div class="admin-nav-section">Overview</div>
+      <a href="/field-app/admin/" class="admin-nav-link"><span class="admin-nav-icon">🗺</span> Dashboard</a>
+      <div class="admin-nav-section">Operations</div>
+      <a href="/field-app/admin/shifts.html" class="admin-nav-link"><span class="admin-nav-icon">📅</span> Shifts</a>
+      <a href="/field-app/admin/roster.html" class="admin-nav-link active"><span class="admin-nav-icon">👥</span> Roster</a>
+      <div class="admin-nav-section">Field</div>
+      <a href="/field-app/admin/field.html" class="admin-nav-link"><span class="admin-nav-icon">📍</span> Field View</a>
+    </nav>
+  </aside>
+  <div class="mobile-nav">
+    <a href="/field-app/admin/" class="mobile-nav-link">Dashboard</a>
+    <a href="/field-app/admin/shifts.html" class="mobile-nav-link">Shifts</a>
+    <a href="/field-app/admin/roster.html" class="mobile-nav-link active">Roster</a>
+    <a href="/field-app/admin/field.html" class="mobile-nav-link">Field View</a>
+  </div>
+  <main class="admin-content">
+
+    <div class="admin-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+      <div>
+        <div class="admin-page-title">Volunteer Roster</div>
+        <div class="admin-page-sub" id="roster-sub">Loading…</div>
+      </div>
+      <button class="btn btn-gold" onclick="toggleAddForm()">+ Add Volunteer</button>
+    </div>
+
+    <!-- Add volunteer form -->
+    <div id="add-form" class="page-card" style="display:none;border:2px solid var(--gold);">
+      <div class="page-card-title">Add Volunteer</div>
+      <div class="form-row">
+        <div class="form-col">
+          <label class="form-label">Name <span style="color:var(--red)">*</span></label>
+          <input class="form-input" id="add-name" type="text" placeholder="Full name">
+        </div>
+        <div class="form-col">
+          <label class="form-label">Email (for app access)</label>
+          <input class="form-input" id="add-email" type="email" placeholder="their@gmail.com">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px;">
+        <button class="btn btn-gold" onclick="addVolunteer()">Add</button>
+        <button class="btn btn-ghost" onclick="toggleAddForm()">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Active volunteers -->
+    <div class="page-card">
+      <div class="page-card-title">Active Volunteers</div>
+      <div id="active-list"><div style="color:var(--subtle);font-size:13px;">Loading…</div></div>
+    </div>
+
+    <!-- Inactive volunteers -->
+    <div class="page-card" id="inactive-card" style="display:none;">
+      <div class="page-card-title">Inactive</div>
+      <div id="inactive-list"></div>
+    </div>
+
+  </main>
+</div>
+
+<div id="toast" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--black);border:1px solid var(--gold);color:#fff;font-size:13px;font-weight:600;padding:9px 20px;border-radius:20px;z-index:5000;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" crossorigin="anonymous"></script>
+<script src="/field-app/js/firebase.js"></script>
+<script src="/field-app/js/auth.js"></script>
+<script>
+var roster = {};
+var editingId = null;
+
+initAuth(
+  function(user) { loadRoster(); },
+  function(user) { window.location.href = '/field-app/canvass.html'; }
+);
+
+function loadRoster() {
+  setFbBase();
+  fbGet('/roster').then(function(d) {
+    roster = d || {};
+    renderRoster();
+  });
+}
+
+function renderRoster() {
+  var entries = Object.entries(roster).sort(function(a,b){return (a[1].name||'').localeCompare(b[1].name||'');});
+  var active = entries.filter(function(e){return e[1].status==='active';});
+  var inactive = entries.filter(function(e){return e[1].status!=='active';});
+
+  document.getElementById('roster-sub').textContent = active.length + ' active volunteer' + (active.length===1?'':'s');
+
+  function row(pair, isActive) {
+    var id=pair[0], v=pair[1];
+    return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">' +
+      (editingId===id ?
+        '<input class="form-input" id="edit-name-'+id+'" value="'+v.name+'" style="flex:1;max-width:200px;">' +
+        '<input class="form-input" id="edit-email-'+id+'" value="'+(v.email||'')+'" placeholder="Email" style="flex:1;max-width:220px;">' +
+        '<button class="btn btn-gold btn-sm" data-vid="'+id+'" onclick="saveEdit(this.dataset.vid)">Save</button>' +
+        '<button class="btn btn-ghost btn-sm" onclick="cancelEdit()">Cancel</button>'
+        :
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:13px;font-weight:700;">'+v.name+'</div>' +
+          '<div style="font-size:11px;color:var(--muted);">'+(v.email||'No email')+'</div>' +
+        '</div>' +
+        '<button class="btn btn-ghost btn-sm" data-vid="'+id+'" onclick="startEdit(this.dataset.vid)">Edit</button>' +
+        (isActive ?
+          '<button class="btn btn-danger btn-sm" data-vid="'+id+'" onclick="setStatus(this.dataset.vid,\'inactive\')">Deactivate</button>' :
+          '<button class="btn btn-ghost btn-sm" data-vid="'+id+'" onclick="setStatus(this.dataset.vid,\'active\')">Reactivate</button>'
+        )
+      ) +
+    '</div>';
+  }
+
+  var activeEl = document.getElementById('active-list');
+  activeEl.innerHTML = active.length ? active.map(function(p){return row(p,true);}).join('') :
+    '<div style="color:var(--subtle);font-size:13px;">No active volunteers. Add one above.</div>';
+
+  var inactiveCard = document.getElementById('inactive-card');
+  var inactiveEl = document.getElementById('inactive-list');
+  if (inactive.length) {
+    inactiveCard.style.display = 'block';
+    inactiveEl.innerHTML = inactive.map(function(p){return row(p,false);}).join('');
+  } else {
+    inactiveCard.style.display = 'none';
+  }
+}
+
+function toggleAddForm() {
+  var f = document.getElementById('add-form');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  if (f.style.display === 'block') {
+    document.getElementById('add-name').value = '';
+    document.getElementById('add-email').value = '';
+    document.getElementById('add-name').focus();
+  }
+}
+
+function addVolunteer() {
+  var name = document.getElementById('add-name').value.trim();
+  var email = document.getElementById('add-email').value.trim().toLowerCase();
+  if (!name) { showToast('Name is required'); return; }
+  var id = genId();
+  roster[id] = { name:name, email:email, status:'active', added:new Date().toISOString() };
+  fbPut('/roster/'+id, roster[id]).then(function() {
+    toggleAddForm();
+    renderRoster();
+    showToast(name + ' added to roster');
+  }).catch(function(){ showToast('Save failed'); });
+}
+
+function startEdit(id) { editingId = id; renderRoster(); }
+function cancelEdit() { editingId = null; renderRoster(); }
+
+function saveEdit(id) {
+  var name = (document.getElementById('edit-name-'+id)||{}).value||'';
+  var email = ((document.getElementById('edit-email-'+id)||{}).value||'').trim().toLowerCase();
+  if (!name.trim()) { showToast('Name required'); return; }
+  roster[id].name = name.trim();
+  roster[id].email = email;
+  fbPut('/roster/'+id, roster[id]).then(function() {
+    editingId = null; renderRoster(); showToast('Saved');
+  }).catch(function(){ showToast('Save failed'); });
+}
+
+function setStatus(id, status) {
+  var name = roster[id].name;
+  if (status === 'inactive' && !confirm('Deactivate ' + name + '? They will no longer appear in shift planning.')) return;
+  roster[id].status = status;
+  fbPatch('/roster/'+id, {status:status}).then(function() {
+    renderRoster(); showToast(name + (status==='active'?' reactivated':' deactivated'));
+  }).catch(function(){ showToast('Save failed'); });
+}
+
+var _tt;
+function showToast(msg){var t=document.getElementById('toast');t.textContent=msg;t.style.opacity='1';clearTimeout(_tt);_tt=setTimeout(function(){t.style.opacity='0';},2500);}
+</script>
+</body>
+</html>

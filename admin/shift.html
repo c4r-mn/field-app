@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shift — Cassie for Roseville Field App</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/app.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
+</head>
+<body>
+
+<div id="user-bar">
+  <span id="user-bar-name"></span>
+  <div class="user-bar-right">
+    <a href="/field-app/admin/shifts.html" style="color:var(--gold);font-size:11px;font-weight:700;text-decoration:none;">← All Shifts</a>
+    <button class="signout-btn" onclick="doSignOut()">Sign Out</button>
+  </div>
+</div>
+
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <div class="admin-sidebar-brand">
+      <div class="brand-name">🌹 Cassie for Roseville</div>
+      <div class="brand-sub">Field Operations Admin</div>
+    </div>
+    <nav class="admin-nav">
+      <div class="admin-nav-section">Overview</div>
+      <a href="/field-app/admin/" class="admin-nav-link"><span class="admin-nav-icon">🗺</span> Dashboard</a>
+      <div class="admin-nav-section">Operations</div>
+      <a href="/field-app/admin/shifts.html" class="admin-nav-link active"><span class="admin-nav-icon">📅</span> Shifts</a>
+      <a href="/field-app/admin/roster.html" class="admin-nav-link"><span class="admin-nav-icon">👥</span> Roster</a>
+      <div class="admin-nav-section">Field</div>
+      <a href="/field-app/admin/field.html" class="admin-nav-link"><span class="admin-nav-icon">📍</span> Field View</a>
+    </nav>
+  </aside>
+  <div class="mobile-nav">
+    <a href="/field-app/admin/" class="mobile-nav-link">Dashboard</a>
+    <a href="/field-app/admin/shifts.html" class="mobile-nav-link active">Shifts</a>
+    <a href="/field-app/admin/roster.html" class="mobile-nav-link">Roster</a>
+    <a href="/field-app/admin/field.html" class="mobile-nav-link">Field View</a>
+  </div>
+  <main class="admin-content">
+
+    <div class="admin-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+      <div>
+        <div class="admin-page-title" id="shift-title">Loading shift…</div>
+        <div class="admin-page-sub" id="shift-sub"></div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-gold" id="save-shift-btn" onclick="saveShiftEdits()">Save Changes</button>
+        <button class="btn btn-danger" id="print-btn" onclick="printWalkSheetFromShift()" style="display:none;">🖨 Print Walk Sheet</button>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;" id="shift-edit-grid">
+      <!-- Shift details -->
+      <div class="page-card">
+        <div class="page-card-title">Shift Details</div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <input class="form-input" id="edit-notes" type="text" placeholder="Shift notes…">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Volunteers</label>
+          <div id="edit-vol-grid" class="vol-check-grid"></div>
+        </div>
+      </div>
+      <!-- Canvasser selector for assignment -->
+      <div class="page-card">
+        <div class="page-card-title">Assign Houses</div>
+        <div class="form-group">
+          <label class="form-label">Canvasser</label>
+          <select class="form-input" id="assign-canvasser" onchange="loadCanvasserAssignment()">
+            <option value="">— Select canvasser —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Partner (optional — gets same houses)</label>
+          <select class="form-input" id="assign-partner">
+            <option value="">— No partner —</option>
+          </select>
+        </div>
+        <div id="assign-status" style="font-size:12px;color:var(--muted);margin-bottom:8px;"></div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-gold" onclick="saveAssignments()">Save Assignments</button>
+          <button class="btn btn-ghost btn-sm" id="print-assign-btn" onclick="printWalkSheetFromShift()" style="display:none;">🖨 Print</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Map and checklist -->
+    <div class="page-card" id="assign-card" style="display:none;">
+      <div class="page-card-title" id="assign-card-title">Select Houses</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Click map pins or checklist items to add to route. Use ▲▼ to reorder.</div>
+      <div id="shift-map" style="height:400px;border-radius:8px;border:1px solid var(--border);margin-bottom:12px;"></div>
+      <div id="assign-checklist" style="border:1px solid var(--border);border-radius:8px;max-height:300px;overflow-y:auto;"></div>
+    </div>
+
+    <!-- Results section (for all shifts) -->
+    <div class="page-card" id="results-card">
+      <div class="page-card-title">Results by Canvasser</div>
+      <div id="shift-results"><div style="color:var(--subtle);font-size:13px;">Loading results…</div></div>
+    </div>
+
+  </main>
+</div>
+
+<div id="toast" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--black);border:1px solid var(--gold);color:#fff;font-size:13px;font-weight:600;padding:9px 20px;border-radius:20px;z-index:5000;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV/XN2GqNs=" crossorigin="anonymous"></script>
+<script src="/field-app/js/firebase.js"></script>
+<script src="/field-app/js/auth.js"></script>
+<script src="/field-app/js/data.js"></script>
+<script>
+var shiftDate = new URLSearchParams(window.location.search).get('date') || '';
+var roster = {};
+var shiftData = null;
+var shiftMap = null;
+var adminAddresses = [];
+var adminSelected = {};
+var adminRoute = [];
+var adminMarkers = {};
+var currentCanvasserId = '';
+var allAssignments = {};
+
+var PROP_META = {
+  house:     {label:'House',color:'#27ae60'},
+  apartment: {label:'Apartment',color:'#2563eb'},
+  senior:    {label:'55+ Community',color:'#d97706'},
+  mobile:    {label:'Mobile Home Park',color:'#7c3aed'},
+  assisted:  {label:'Assisted Living',color:'#e67e22'},
+};
+
+initAuth(
+  function(user) { if (shiftDate) loadShift(); else window.location.href='/field-app/admin/shifts.html'; },
+  function(user) { window.location.href='/field-app/canvass.html'; }
+);
+
+function loadShift() {
+  setFbBase();
+  Promise.all([fbGet('/roster'), fbGet('/canvass-days/'+shiftDate)]).then(function(r) {
+    roster = r[0] || {};
+    shiftData = r[1];
+    if (!shiftData) { document.getElementById('shift-title').textContent = 'Shift not found'; return; }
+    renderShiftHeader();
+    renderEditForm();
+    buildAssignSelects();
+    loadAllAssignments();
+    loadResults();
+  });
+}
+
+function volName(id) { return roster[id] ? roster[id].name : id; }
+function activeVols() {
+  return Object.entries(roster).filter(function(e){return e[1].status==='active';})
+    .sort(function(a,b){return a[1].name.localeCompare(b[1].name);})
+    .map(function(e){return {id:e[0],name:e[1].name};});
+}
+
+function renderShiftHeader() {
+  var hood = (window.NEIGHBORHOODS||[]).find(function(n){return n.key===shiftData.neighborhood;});
+  var hoodName = hood ? hood.displayName : shiftData.neighborhood;
+  document.getElementById('shift-title').textContent = formatDate(shiftDate) + ' — ' + hoodName;
+  var isPast = shiftDate < new Date().toISOString().slice(0,10);
+  document.getElementById('shift-sub').textContent = isPast ? 'Past shift' : 'Upcoming shift';
+  adminAddresses = (window.NEIGHBORHOOD_DATA && window.NEIGHBORHOOD_DATA[shiftData.neighborhood]) || [];
+}
+
+function renderEditForm() {
+  document.getElementById('edit-notes').value = shiftData.notes || '';
+  var grid = document.getElementById('edit-vol-grid');
+  var vols = activeVols();
+  grid.innerHTML = vols.map(function(v) {
+    var checked = (shiftData.volunteers||[]).indexOf(v.id) !== -1;
+    return '<div class="vol-check-item'+(checked?' checked':'')+'" data-id="'+v.id+'" onclick="this.classList.toggle(\'checked\')">' +
+      '<div class="vci-box">✓</div><div class="vci-name">'+v.name+'</div></div>';
+  }).join('');
+}
+
+function buildAssignSelects() {
+  var vols = (shiftData.volunteers||[]).map(function(id){return {id:id,name:volName(id)};});
+  if (!vols.length) vols = activeVols();
+  var cvSel = document.getElementById('assign-canvasser');
+  var ptSel = document.getElementById('assign-partner');
+  vols.forEach(function(v) {
+    var o = document.createElement('option'); o.value=v.id; o.textContent=v.name; cvSel.appendChild(o);
+    var o2 = document.createElement('option'); o2.value=v.id; o2.textContent=v.name; ptSel.appendChild(o2);
+  });
+}
+
+function loadAllAssignments() {
+  fbGet('/'+shiftData.neighborhood+'/assignments/'+shiftDate).then(function(d) {
+    allAssignments = (d && typeof d==='object') ? d : {};
+    if (!shiftMap) initShiftMap();
+  });
+}
+
+function loadCanvasserAssignment() {
+  currentCanvasserId = document.getElementById('assign-canvasser').value;
+  adminSelected = {};
+  adminRoute = [];
+  document.getElementById('assign-card').style.display = currentCanvasserId ? 'block' : 'none';
+  document.getElementById('print-assign-btn').style.display = currentCanvasserId ? 'inline-flex' : 'none';
+
+  if (!currentCanvasserId) return;
+
+  var saved = allAssignments[currentCanvasserId];
+  if (saved) {
+    if (Array.isArray(saved.route)) {
+      adminRoute = saved.route;
+      adminSelected = saved.assignments || {};
+    } else {
+      Object.keys(saved).forEach(function(k){
+        if(k!=='route'&&k!=='assignments'){adminSelected[k]=true;adminRoute.push(k);}
+      });
+    }
+  }
+
+  document.getElementById('assign-card-title').textContent = 'Houses for ' + volName(currentCanvasserId);
+  document.getElementById('assign-status').textContent = adminRoute.length + ' addresses in route';
+  refreshMapMarkers();
+  renderChecklist();
+  if (shiftMap) shiftMap.invalidateSize();
+}
+
+function initShiftMap() {
+  shiftMap = L.map('shift-map').setView([45.017,-93.153],15);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
+  }).addTo(shiftMap);
+  if (adminAddresses.length) {
+    var lats=adminAddresses.map(function(a){return a.lat;});
+    var lngs=adminAddresses.map(function(a){return a.lng;});
+    shiftMap.fitBounds([[Math.min.apply(null,lats),Math.min.apply(null,lngs)],[Math.max.apply(null,lats),Math.max.apply(null,lngs)]],{padding:[20,20]});
+  }
+  refreshMapMarkers();
+}
+
+function getSiblingUnits(id) {
+  var addr = adminAddresses.find(function(a){return a.id===id;});
+  if (!addr||!addr.u) return [id];
+  return adminAddresses.filter(function(a){return a.n===addr.n&&a.s===addr.s;})
+    .map(function(a){return a.id;})
+    .sort(function(a,b){
+      var au=adminAddresses.find(function(x){return x.id===a;});
+      var bu=adminAddresses.find(function(x){return x.id===b;});
+      return (parseInt((au&&au.u||'').replace(/\D/g,''))||0)-(parseInt((bu&&bu.u||'').replace(/\D/g,''))||0);
+    });
+}
+
+function toggleAddr(id) {
+  if (!currentCanvasserId) { showToast('Select a canvasser first'); return; }
+  var siblings = getSiblingUnits(id);
+  if (adminSelected[id]) {
+    siblings.forEach(function(sid){delete adminSelected[sid];adminRoute=adminRoute.filter(function(r){return r!==sid;});});
+  } else {
+    siblings.forEach(function(sid){if(!adminSelected[sid]){adminSelected[sid]=true;adminRoute.push(sid);}});
+  }
+  document.getElementById('assign-status').textContent = adminRoute.length + ' addresses in route';
+  refreshMapMarkers();
+  renderChecklist();
+}
+
+function moveRoute(id, dir) {
+  var i=adminRoute.indexOf(id); if(i===-1) return;
+  var j=i+dir; if(j<0||j>=adminRoute.length) return;
+  var tmp=adminRoute[i];adminRoute[i]=adminRoute[j];adminRoute[j]=tmp;
+  refreshMapMarkers();
+  renderChecklist();
+}
+
+function refreshMapMarkers() {
+  if (!shiftMap) return;
+  Object.values(adminMarkers).forEach(function(m){shiftMap.removeLayer(m);});
+  adminMarkers = {};
+  adminAddresses.forEach(function(addr) {
+    var sel=!!adminSelected[addr.id];
+    var routeIdx=adminRoute.indexOf(addr.id);
+    var meta=PROP_META[addr.t]||PROP_META.house;
+    var color=sel?'#D4A832':meta.color;
+    var size=sel?20:9; var op=sel?1:.35;
+    var label=sel&&routeIdx>=0?'<span style="font-size:8px;font-weight:800;color:#1d1b16;">'+(routeIdx+1)+'</span>':'';
+    var icon=L.divIcon({className:'',html:'<div style="width:'+size+'px;height:'+size+'px;background:'+color+';border:'+(sel?'2px solid rgba(0,0,0,.3)':'1.5px solid rgba(0,0,0,.1)')+';border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.2);cursor:pointer;opacity:'+op+';display:flex;align-items:center;justify-content:center;">'+label+'</div>',iconSize:[size,size],iconAnchor:[size/2,size/2]});
+    var m=L.marker([addr.lat,addr.lng],{icon:icon}).addTo(shiftMap);
+    m.on('click',function(e){L.DomEvent.stopPropagation(e);toggleAddr(addr.id);});
+    m.bindTooltip(addr.n+' '+addr.s);
+    adminMarkers[addr.id]=m;
+  });
+}
+
+function renderChecklist() {
+  var container = document.getElementById('assign-checklist');
+  var addrMap={};
+  adminAddresses.forEach(function(a){addrMap[a.id]=a;});
+
+  var routeHtml = adminRoute.map(function(id,i) {
+    var addr=addrMap[id]; if(!addr) return '';
+    var meta=PROP_META[addr.t]||PROP_META.house;
+    var isFirst=i===0,isLast=i===adminRoute.length-1;
+    return '<div style="display:flex;align-items:center;gap:6px;padding:7px 10px;border-bottom:1px solid #f0ede4;min-height:44px;border-left:3px solid var(--gold);">' +
+      '<div style="display:flex;flex-direction:column;gap:1px;width:20px;">' +
+        '<button data-rid="'+id+'" data-dir="-1" onclick="moveRoute(this.dataset.rid,parseInt(this.dataset.dir))" '+(isFirst?'disabled':'')+' style="border:none;background:none;cursor:pointer;color:'+(isFirst?'#ddd':'var(--gold-acc)')+';font-size:13px;padding:1px;line-height:1;">▲</button>' +
+        '<button data-rid="'+id+'" data-dir="1" onclick="moveRoute(this.dataset.rid,parseInt(this.dataset.dir))" '+(isLast?'disabled':'')+' style="border:none;background:none;cursor:pointer;color:'+(isLast?'#ddd':'var(--gold-acc)')+';font-size:13px;padding:1px;line-height:1;">▼</button>' +
+      '</div>' +
+      '<div style="width:10px;height:10px;border-radius:50%;background:var(--gold);flex-shrink:0;" data-aid="'+id+'" onclick="toggleAddr(this.dataset.aid)"></div>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-size:12px;font-weight:700;"><span style="color:var(--gold-acc);margin-right:4px;">'+(i+1)+'.</span>'+addr.n+' '+addr.s+(addr.u?' · '+addr.u:'')+'</div>' +
+        '<div style="font-size:10px;color:var(--subtle);">'+meta.label+'</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  var unsel = adminAddresses.filter(function(a){return !adminSelected[a.id];})
+    .sort(function(a,b){return parseInt(a.n||0)-parseInt(b.n||0);});
+
+  var divider = (adminRoute.length && unsel.length) ?
+    '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--subtle);padding:6px 10px;background:var(--light);">— Not yet added —</div>' : '';
+
+  var unselHtml = unsel.map(function(addr) {
+    var meta=PROP_META[addr.t]||PROP_META.house;
+    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid #f0ede4;min-height:44px;cursor:pointer;" data-aid="'+addr.id+'" onclick="toggleAddr(this.dataset.aid)">' +
+      '<div style="width:10px;height:10px;border-radius:50%;border:1.5px solid #ccc;flex-shrink:0;"></div>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-size:12px;font-weight:600;">'+addr.n+' '+addr.s+(addr.u?' · '+addr.u:'')+'</div>' +
+        '<div style="font-size:10px;color:var(--subtle);">'+meta.label+'</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  container.innerHTML = routeHtml + divider + unselHtml;
+}
+
+function saveAssignments() {
+  if (!currentCanvasserId||!shiftData.neighborhood) { showToast('Select a canvasser first'); return; }
+  if (!adminRoute.length) { showToast('No addresses selected'); return; }
+  var partnerId = document.getElementById('assign-partner').value;
+  var payload = {route:adminRoute, assignments:adminSelected};
+  var saves = [fbPut('/'+shiftData.neighborhood+'/assignments/'+shiftDate+'/'+currentCanvasserId, payload)];
+  if (partnerId && partnerId !== currentCanvasserId) {
+    saves.push(fbPut('/'+shiftData.neighborhood+'/assignments/'+shiftDate+'/'+partnerId, payload));
+  }
+  Promise.all(saves).then(function() {
+    allAssignments[currentCanvasserId] = payload;
+    var names = volName(currentCanvasserId)+(partnerId&&partnerId!==currentCanvasserId?' & '+volName(partnerId):'');
+    showToast('Saved '+adminRoute.length+' addresses for '+names);
+  }).catch(function(){ showToast('Save failed'); });
+}
+
+function saveShiftEdits() {
+  var notes = document.getElementById('edit-notes').value.trim();
+  var vols = Array.from(document.querySelectorAll('#edit-vol-grid .vol-check-item.checked')).map(function(el){return el.dataset.id;});
+  shiftData.notes = notes;
+  shiftData.volunteers = vols;
+  fbPut('/canvass-days/'+shiftDate, shiftData).then(function() {
+    buildAssignSelects();
+    showToast('Shift updated');
+  }).catch(function(){ showToast('Save failed'); });
+}
+
+function loadResults() {
+  if (!shiftData.neighborhood) return;
+  fbGet('/'+shiftData.neighborhood+'/logs/'+shiftDate).then(function(dayLogs) {
+    var el = document.getElementById('shift-results');
+    if (!dayLogs || !Object.keys(dayLogs).length) {
+      el.innerHTML = '<div style="color:var(--subtle);font-size:13px;">No results logged for this shift yet.</div>';
+      return;
+    }
+    var html = '';
+    Object.entries(dayLogs).forEach(function(pair) {
+      var volId=pair[0], volLogs=pair[1];
+      if (!volLogs) return;
+      var entries = Object.values(volLogs);
+      var counts = {};
+      entries.forEach(function(l){ counts[l.contact]=(counts[l.contact]||0)+1; });
+      html += '<div style="margin-bottom:12px;">' +
+        '<div style="font-size:13px;font-weight:700;margin-bottom:6px;">'+volName(volId)+' — '+entries.length+' doors</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+          Object.entries(counts).map(function(c){
+            return '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--light);color:var(--muted);">'+c[0]+': '+c[1]+'</span>';
+          }).join('')+
+        '</div>' +
+      '</div>';
+    });
+    el.innerHTML = html;
+  });
+}
+
+function printWalkSheetFromShift() {
+  if (!adminRoute.length) { showToast('No addresses in route to print'); return; }
+  // Build print sheet
+  var addrMap={};
+  adminAddresses.forEach(function(a){addrMap[a.id]=a;});
+  var sorted = adminRoute.filter(function(id){return !!addrMap[id];}).map(function(id){return addrMap[id];});
+  var hood = (window.NEIGHBORHOODS||[]).find(function(n){return n.key===shiftData.neighborhood;});
+  var hoodName = hood ? hood.displayName : shiftData.neighborhood;
+  var names = volName(currentCanvasserId);
+  var partnerId = document.getElementById('assign-partner').value;
+  if (partnerId && partnerId !== currentCanvasserId) names += ' & ' + volName(partnerId);
+
+  var typeLabels = {senior:'55+ — Call first',apartment:'Apt — Coordinate',mobile:'Mobile Home — Coordinate',assisted:'Assisted — Call first'};
+  var rows = sorted.map(function(addr,i){
+    var meta=addr.t!=='house'?(typeLabels[addr.t]||''):'';
+    var isOdd=parseInt(addr.n||0)%2===1;
+    return '<tr class="'+(isOdd?'odd':'even')+'">' +
+      '<td class="num">'+(i+1)+'</td>' +
+      '<td class="addr"><strong>'+addr.n+'</strong> '+addr.s+(addr.u?' · <span style="color:#6b6860;font-weight:400;">'+addr.u+'</span>':'')+(meta?'<div style="font-size:7.5pt;color:#d97706;font-weight:600;">'+meta+'</div>':'')+'</td>' +
+      '<td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td>' +
+      '<td class="notes"></td></tr>';
+  }).join('');
+
+  var css = '@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap");' +
+    'body{font-family:Outfit,sans-serif;font-size:9.5pt;color:#1d1b16;margin:0;}' +
+    '.page{padding:10mm 12mm;}' +
+    '.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:6px;border-bottom:3px solid #D4A832;margin-bottom:8px;}' +
+    '.hdr-l .camp{font-size:7.5pt;font-weight:800;color:#9A7215;}.hdr-l .title{font-size:14pt;font-weight:800;}.hdr-l .meta{font-size:8pt;color:#6b6860;}' +
+    '.hdr-r{text-align:right;}.hdr-r .cnt{font-size:20pt;font-weight:800;color:#D4A832;line-height:1;}.hdr-r .lbl{font-size:7pt;color:#6b6860;text-transform:uppercase;}' +
+    'table{width:100%;border-collapse:collapse;}th{font-size:7pt;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#6b6860;padding:4px;border-bottom:2px solid #e0ddd3;text-align:center;}' +
+    'th.al{text-align:left;}td{padding:4px;border-bottom:1px solid #f0ede4;vertical-align:middle;}' +
+    '.odd{background:#fff;}.even{background:#faf8f4;}' +
+    '.num{width:20px;text-align:right;padding-right:6px;font-size:8.5pt;font-weight:800;color:#a8a49a;}' +
+    '.addr{font-size:9.5pt;font-weight:700;min-width:160px;}' +
+    '.cb{width:26px;text-align:center;border-left:1px solid #e8e4dc;}' +
+    '.cb::after{content:"";display:inline-block;width:10px;height:10px;border:1.5px solid #888;border-radius:2px;}' +
+    '.notes{min-width:100px;border-left:1px solid #e8e4dc;}' +
+    '.footer{margin-top:8px;padding-top:4px;border-top:1px solid #e0ddd3;font-size:7.5pt;color:#a8a49a;display:flex;justify-content:space-between;}' +
+    '@media print{body{margin:0;}tr{page-break-inside:avoid;}}';
+
+  var body = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Walk Sheet</title><style>'+css+'</style></head><body>' +
+    '<div class="page">' +
+    '<div class="hdr"><div class="hdr-l"><div class="camp">Cassie for Roseville — Field App</div><div class="title">Walk Sheet: '+names+'</div><div class="meta">'+hoodName+' · '+formatDateLong(shiftDate)+'</div></div>' +
+    '<div class="hdr-r"><div class="cnt">'+sorted.length+'</div><div class="lbl">Addresses</div></div></div>' +
+    '<table><thead><tr><th></th><th class="al">Address</th><th>Not Home</th><th>Vacant</th><th>For Sale</th><th>No Solic.</th><th>Refused</th><th>Accepted</th><th>Other Lang.</th><th style="text-align:left;padding-left:6px;">Lit / Contact / Sign / Revisit · Name · Phone · Notes</th></tr></thead>' +
+    '<tbody>'+rows+'</tbody></table>' +
+    '<div class="footer"><span>Cassie Iverson for Roseville City Council 2026 · cassie4roseville.com</span><span>Printed '+new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</span></div>' +
+    '</div><script>window.onload=function(){window.print();};<\/script></body></html>';
+
+  try {
+    var blob = new Blob([body],{type:'text/html'});
+    var url = URL.createObjectURL(blob);
+    var w = window.open(url,'_blank');
+    if (!w) showToast('Allow popups to print');
+    setTimeout(function(){URL.revokeObjectURL(url);},60000);
+  } catch(e){ showToast('Print error: '+e.message); }
+}
+
+var _tt;
+function showToast(msg){var t=document.getElementById('toast');t.textContent=msg;t.style.opacity='1';clearTimeout(_tt);_tt=setTimeout(function(){t.style.opacity='0';},2500);}
+</script>
+</body>
+</html>

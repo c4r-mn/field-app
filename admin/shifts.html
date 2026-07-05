@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shifts — Cassie for Roseville Field App</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/app.css">
+</head>
+<body>
+
+<div id="user-bar">
+  <span id="user-bar-name"></span>
+  <div class="user-bar-right">
+    <button class="signout-btn" onclick="doSignOut()">Sign Out</button>
+  </div>
+</div>
+
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <div class="admin-sidebar-brand">
+      <div class="brand-name">🌹 Cassie for Roseville</div>
+      <div class="brand-sub">Field Operations Admin</div>
+    </div>
+    <nav class="admin-nav">
+      <div class="admin-nav-section">Overview</div>
+      <a href="/field-app/admin/" class="admin-nav-link"><span class="admin-nav-icon">🗺</span> Dashboard</a>
+      <div class="admin-nav-section">Operations</div>
+      <a href="/field-app/admin/shifts.html" class="admin-nav-link active"><span class="admin-nav-icon">📅</span> Shifts</a>
+      <a href="/field-app/admin/roster.html" class="admin-nav-link"><span class="admin-nav-icon">👥</span> Roster</a>
+      <div class="admin-nav-section">Field</div>
+      <a href="/field-app/admin/field.html" class="admin-nav-link"><span class="admin-nav-icon">📍</span> Field View</a>
+    </nav>
+  </aside>
+  <div class="mobile-nav">
+    <a href="/field-app/admin/" class="mobile-nav-link">Dashboard</a>
+    <a href="/field-app/admin/shifts.html" class="mobile-nav-link active">Shifts</a>
+    <a href="/field-app/admin/roster.html" class="mobile-nav-link">Roster</a>
+    <a href="/field-app/admin/field.html" class="mobile-nav-link">Field View</a>
+  </div>
+  <main class="admin-content">
+
+    <div class="admin-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+      <div>
+        <div class="admin-page-title">Canvass Shifts</div>
+        <div class="admin-page-sub">Create and manage canvassing shifts</div>
+      </div>
+      <button class="btn btn-gold" onclick="toggleNewForm()">+ New Shift</button>
+    </div>
+
+    <!-- New shift form -->
+    <div id="new-shift-form" class="page-card" style="display:none;border:2px solid var(--gold);">
+      <div class="page-card-title">New Canvass Shift</div>
+      <div class="form-row">
+        <div class="form-col">
+          <label class="form-label">Date</label>
+          <input class="form-input" id="new-date" type="date">
+        </div>
+        <div class="form-col">
+          <label class="form-label">Neighborhood</label>
+          <select class="form-input" id="new-hood">
+            <option value="">— Select —</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes (optional)</label>
+        <input class="form-input" id="new-notes" type="text" placeholder="e.g. Rosefest followup">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Volunteers</label>
+        <div id="new-vol-grid" class="vol-check-grid"></div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-gold" onclick="saveNewShift()">Create Shift</button>
+        <button class="btn btn-ghost" onclick="toggleNewForm()">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Upcoming shifts -->
+    <div class="page-card">
+      <div class="page-card-title">Upcoming Shifts</div>
+      <div id="upcoming-shifts"><div style="color:var(--subtle);font-size:13px;">Loading…</div></div>
+    </div>
+
+    <!-- Past shifts -->
+    <div class="page-card">
+      <div class="page-card-title">Past Shifts</div>
+      <div id="past-shifts"><div style="color:var(--subtle);font-size:13px;">Loading…</div></div>
+    </div>
+
+  </main>
+</div>
+
+<div id="toast" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--black);border:1px solid var(--gold);color:#fff;font-size:13px;font-weight:600;padding:9px 20px;border-radius:20px;z-index:5000;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" crossorigin="anonymous"></script>
+<script src="/field-app/js/firebase.js"></script>
+<script src="/field-app/js/auth.js"></script>
+<script src="/field-app/js/data.js"></script>
+<script>
+var roster = {};
+var canvassDays = {};
+var today = new Date().toISOString().slice(0,10);
+
+initAuth(
+  function(user) { loadShifts(); },
+  function(user) { window.location.href = '/field-app/canvass.html'; }
+);
+
+function loadShifts() {
+  setFbBase();
+  Promise.all([fbGet('/roster'), fbGet('/canvass-days')]).then(function(r) {
+    roster = r[0] || {};
+    canvassDays = r[1] || {};
+    renderShifts();
+    buildNewForm();
+    // Auto-open new form if ?new=1
+    if (window.location.search.indexOf('new=1') !== -1) toggleNewForm();
+  });
+}
+
+function volName(id) { return roster[id] ? roster[id].name : id; }
+
+function activeVols() {
+  return Object.entries(roster)
+    .filter(function(e){ return e[1].status==='active'; })
+    .sort(function(a,b){ return a[1].name.localeCompare(b[1].name); })
+    .map(function(e){ return {id:e[0], name:e[1].name}; });
+}
+
+function buildNewForm() {
+  var sel = document.getElementById('new-hood');
+  (window.NEIGHBORHOODS||[]).forEach(function(n) {
+    var o = document.createElement('option');
+    o.value = n.key; o.textContent = n.displayName;
+    sel.appendChild(o);
+  });
+  var grid = document.getElementById('new-vol-grid');
+  var vols = activeVols();
+  grid.innerHTML = vols.map(function(v) {
+    return '<div class="vol-check-item" data-id="'+v.id+'" onclick="this.classList.toggle(\'checked\')">' +
+      '<div class="vci-box">✓</div><div class="vci-name">'+v.name+'</div></div>';
+  }).join('') || '<div style="font-size:12px;color:var(--subtle);">No active volunteers — add them in Roster first.</div>';
+}
+
+function toggleNewForm() {
+  var f = document.getElementById('new-shift-form');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  if (f.style.display === 'block') {
+    // Set default date to today
+    document.getElementById('new-date').value = today;
+    document.getElementById('new-notes').value = '';
+    document.querySelectorAll('#new-vol-grid .vol-check-item').forEach(function(el){ el.classList.remove('checked'); });
+  }
+}
+
+function saveNewShift() {
+  var date = document.getElementById('new-date').value;
+  var hood = document.getElementById('new-hood').value;
+  var notes = document.getElementById('new-notes').value.trim();
+  if (!date) { showToast('Pick a date'); return; }
+  if (!hood) { showToast('Pick a neighborhood'); return; }
+  var vols = Array.from(document.querySelectorAll('#new-vol-grid .vol-check-item.checked')).map(function(el){ return el.dataset.id; });
+  canvassDays[date] = { neighborhood:hood, notes:notes, volunteers:vols, created:new Date().toISOString() };
+  fbPut('/canvass-days/'+date, canvassDays[date]).then(function() {
+    toggleNewForm();
+    renderShifts();
+    showToast('Shift created for '+formatDate(date));
+  }).catch(function(){ showToast('Save failed'); });
+}
+
+function renderShifts() {
+  var days = Object.entries(canvassDays).sort(function(a,b){ return a[0].localeCompare(b[0]); });
+  var upcoming = days.filter(function(p){ return p[0]>=today; });
+  var past = days.filter(function(p){ return p[0]<today; }).reverse();
+
+  function card(pair) {
+    var date=pair[0], day=pair[1];
+    var hood = (window.NEIGHBORHOODS||[]).find(function(n){return n.key===day.neighborhood;});
+    var hoodName = hood ? hood.displayName : (day.neighborhood||'');
+    var vols = (day.volunteers||[]).map(volName);
+    var d = new Date(date+'T12:00:00');
+    return '<div class="shift-item">' +
+      '<div class="shift-date-badge"><div class="day">'+d.getDate()+'</div><div class="month">'+d.toLocaleDateString('en-US',{month:'short'})+'</div></div>' +
+      '<div class="shift-info">' +
+        '<div class="shift-hood">'+hoodName+(day.notes?' · '+day.notes:'')+'</div>' +
+        '<div class="shift-meta">'+formatDate(date)+'</div>' +
+        (vols.length?'<div class="shift-vols">'+vols.map(function(n){return '<span class="shift-vol-pill">'+n+'</span>';}).join('')+'</div>':'') +
+      '</div>' +
+      '<div class="shift-actions">' +
+        '<a href="/field-app/admin/shift.html?date='+date+'" class="btn btn-ghost btn-sm">View / Edit</a>' +
+        '<button class="btn btn-danger btn-sm" data-date="'+date+'" onclick="deleteShift(this.dataset.date)">Delete</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  var upEl = document.getElementById('upcoming-shifts');
+  upEl.innerHTML = upcoming.length ? upcoming.map(card).join('') : '<div style="color:var(--subtle);font-size:13px;">No upcoming shifts.</div>';
+
+  var pastEl = document.getElementById('past-shifts');
+  pastEl.innerHTML = past.length ? past.map(function(p){ return card(p); }).join('') : '<div style="color:var(--subtle);font-size:13px;">No past shifts yet.</div>';
+}
+
+function deleteShift(date) {
+  if (!confirm('Delete shift for '+formatDate(date)+'?')) return;
+  delete canvassDays[date];
+  fbPut('/canvass-days/'+date, null).then(function() {
+    renderShifts(); showToast('Shift deleted');
+  });
+}
+
+var _toastTimer;
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.style.opacity = '1';
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(function(){ t.style.opacity = '0'; }, 2500);
+}
+</script>
+</body>
+</html>
