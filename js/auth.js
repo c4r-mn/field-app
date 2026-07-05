@@ -1,3 +1,14 @@
+// ── EMERGENCY ESCAPE HATCH ───────────────────────────────────────────────────
+// Add ?signout=1 to URL to force sign out regardless of state
+if (window.location.search.indexOf('signout=1') !== -1) {
+  // Clear all Firebase auth state from localStorage
+  Object.keys(localStorage).forEach(function(k) {
+    if (k.indexOf('firebase') !== -1) localStorage.removeItem(k);
+  });
+  // Redirect to clean URL
+  window.location.href = window.location.pathname;
+}
+
 // Firebase config — safe to be public (security enforced by Firebase rules)
 // Admin emails determine who gets admin UI vs canvasser UI
 var FIREBASE_CONFIG = {
@@ -47,6 +58,8 @@ function initAuth() {
     document.getElementById('admin-screen').style.display = 'none';
     document.getElementById('setup-screen').style.display = 'none';
     document.getElementById('app').style.display = 'none';
+    var ub = document.getElementById('user-bar');
+    if (ub) ub.style.display = 'none';
     clearAuthError();
     var eb = document.getElementById('auth-btn-email');
     var gb = document.getElementById('auth-btn-google');
@@ -111,7 +124,15 @@ function initAuth() {
 
   // ── AUTH STATE ───────────────────────────────────────────────────────────────
   auth.onAuthStateChanged(function(user) {
-    if (!user) { showAuthScreen(); return; }
+    var userBar = document.getElementById('user-bar');
+    var nameEl = document.getElementById('user-bar-name');
+    if (!user) {
+      if (nameEl) nameEl.textContent = 'Not signed in';
+      showAuthScreen();
+      return;
+    }
+    // Update user bar immediately — before anything else that could crash
+    if (nameEl) nameEl.textContent = (user.displayName || user.email || 'Signed in') + ' — tap Sign Out to switch accounts';
 
     var email = user.email || '';
     var displayName = user.displayName || email.split('@')[0];
@@ -124,12 +145,20 @@ function initAuth() {
       isAdmin: admin
     };
 
+    // Update user bar with role info
+    if (nameEl) nameEl.textContent = displayName + ' (' + (admin ? 'Admin' : 'Canvasser') + ') — Sign Out to switch';
+
     document.getElementById('auth-screen').style.display = 'none';
 
-    if (admin) {
-      if (typeof initFirebaseAdmin === 'function') initFirebaseAdmin();
-    } else {
-      if (typeof initFirebaseCanvasser === 'function') initFirebaseCanvasser();
+    try {
+      if (admin) {
+        if (typeof initFirebaseAdmin === 'function') initFirebaseAdmin();
+      } else {
+        if (typeof initFirebaseCanvasser === 'function') initFirebaseCanvasser();
+      }
+    } catch(e) {
+      var bar = document.getElementById('debug-bar');
+      if (bar) { bar.style.display='block'; bar.textContent='ERROR after login: '+e.message+' (line '+e.lineNumber+')\n'; }
     }
   });
 
