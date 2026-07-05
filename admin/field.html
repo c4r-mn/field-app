@@ -20,17 +20,17 @@
 <div class="admin-layout">
   <aside class="admin-sidebar">
     <div class="admin-sidebar-brand">
-      <div class="brand-name">🌹 Cassie for Roseville</div>
+      <div class="brand-name">Cassie for Roseville</div>
       <div class="brand-sub">Field Operations Admin</div>
     </div>
     <nav class="admin-nav">
       <div class="admin-nav-section">Overview</div>
-      <a href="/field-app/admin/" class="admin-nav-link"><span class="admin-nav-icon">🗺</span> Dashboard</a>
+      <a href="/field-app/admin/" class="admin-nav-link"><span class="admin-nav-icon">Map</span> Dashboard</a>
       <div class="admin-nav-section">Operations</div>
-      <a href="/field-app/admin/shifts.html" class="admin-nav-link"><span class="admin-nav-icon">📅</span> Shifts</a>
-      <a href="/field-app/admin/roster.html" class="admin-nav-link"><span class="admin-nav-icon">👥</span> Roster</a>
+      <a href="/field-app/admin/shifts.html" class="admin-nav-link"><span class="admin-nav-icon">Cal</span> Shifts</a>
+      <a href="/field-app/admin/roster.html" class="admin-nav-link"><span class="admin-nav-icon">Ppl</span> Roster</a>
       <div class="admin-nav-section">Field</div>
-      <a href="/field-app/admin/field.html" class="admin-nav-link active"><span class="admin-nav-icon">📍</span> Field View</a>
+      <a href="/field-app/admin/field.html" class="admin-nav-link active"><span class="admin-nav-icon">Pin</span> Field View</a>
     </nav>
   </aside>
   <div class="mobile-nav">
@@ -44,42 +44,39 @@
     <div class="admin-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px;">
       <div>
         <div class="admin-page-title">Field View</div>
-        <div class="admin-page-sub" id="field-sub">Loading…</div>
+        <div class="admin-page-sub" id="field-sub">Loading...</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn-ghost btn-sm" onclick="exportList('contact')">📞 Cassie to Contact</button>
-        <button class="btn btn-ghost btn-sm" onclick="exportList('signs')">🪧 Yard Signs</button>
-        <button class="btn btn-ghost btn-sm" onclick="exportList('nosolic')">🚫 No Soliciting</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportList('contact')">Cassie to Contact CSV</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportList('signs')">Yard Signs CSV</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportList('nosolic')">No Soliciting CSV</button>
       </div>
     </div>
 
-    <!-- Filters -->
     <div class="field-filters">
       <span style="font-size:11px;font-weight:700;color:var(--muted);">Date:</span>
       <select id="date-select" class="form-input" style="width:auto;padding:5px 10px;font-size:12px;" onchange="setDateFilter(this.value)">
         <option value="all">All Dates</option>
       </select>
       <span style="font-size:11px;font-weight:700;color:var(--muted);margin-left:8px;">Show:</span>
-      <div class="filter-pill active" data-show="completed" onclick="toggleShow('completed')">✅ Completed</div>
-      <div class="filter-pill active" data-show="not-knocked" onclick="toggleShow('not-knocked')">⬜ Not Knocked</div>
-      <div class="filter-pill active" data-show="upcoming" onclick="toggleShow('upcoming')">📅 Upcoming</div>
-      <div class="filter-pill active" data-show="nosolic" onclick="toggleShow('nosolic')">🚫 No Soliciting</div>
-      <div class="filter-pill active" data-show="contact" onclick="toggleShow('contact')">📞 Cassie to Contact</div>
+      <div class="filter-pill active" data-show="completed" onclick="toggleShow('completed')">Completed</div>
+      <div class="filter-pill active" data-show="not-knocked" onclick="toggleShow('not-knocked')">Not Knocked</div>
+      <div class="filter-pill active" data-show="upcoming" onclick="toggleShow('upcoming')">Upcoming</div>
+      <div class="filter-pill active" data-show="nosolic" onclick="toggleShow('nosolic')">No Soliciting</div>
+      <div class="filter-pill active" data-show="contact" onclick="toggleShow('contact')">Cassie to Contact</div>
     </div>
 
-    <!-- Legend -->
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;font-weight:600;color:var(--muted);align-items:center;">
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#27ae60;margin-right:4px;"></span>Accepted</span>
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#64748b;margin-right:4px;"></span>Not Home</span>
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#c0392b;margin-right:4px;"></span>Refused</span>
-      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#2563eb;margin-right:4px;"></span>Other</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#92400e;margin-right:4px;"></span>No Soliciting</span>
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#e0ddd3;border:1px solid #aaa;margin-right:4px;"></span>Not Knocked</span>
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#D4A832;margin-right:4px;"></span>Upcoming</span>
-      <span style="color:#D4A832;">★ = Cassie to Contact</span>
+      <span style="color:#D4A832;">* = Cassie to Contact</span>
     </div>
 
-    <!-- Map -->
-    <div id="field-map" style="height:calc(100vh - 36px - 200px);min-height:400px;border-radius:10px;border:1px solid var(--border);margin-bottom:0;"></div>
+    <div id="field-map" style="height:calc(100vh - 36px - 220px);min-height:400px;border-radius:10px;border:1px solid var(--border);"></div>
 
   </main>
 </div>
@@ -94,15 +91,20 @@
 <script src="/field-app/js/data.js"></script>
 <script>
 var fieldMap = null;
-var allLogs = {}; // addrId -> latest log
-var allAssigned = {}; // addrId -> {date, volId}
-var upcomingAssigned = {}; // addrId -> future date
+var allLogs = {};
+var allAssigned = {};
+var upcomingAssigned = {};
 var canvassDays = {};
 var roster = {};
 var activeDate = 'all';
 var showFilters = {completed:true,'not-knocked':true,upcoming:true,nosolic:true,contact:true};
 var mapMarkers = {};
 var today = new Date().toISOString().slice(0,10);
+
+var RESULT_COLORS = {
+  'Not Home':'#64748b','Vacant':'#94a3b8','For Sale':'#7c3aed',
+  'No Soliciting':'#92400e','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb'
+};
 
 initAuth(
   function(user) { loadFieldData(); },
@@ -113,41 +115,43 @@ function loadFieldData() {
   setFbBase();
   Promise.all([
     fbGet('/roster'),
-    fbGet('/canvass-days'),
+    fbGet('/canvass-days')
   ].concat((window.NEIGHBORHOODS||[]).map(function(n){
-    return Promise.all([fbGet('/'+n.key+'/logs'), fbGet('/'+n.key+'/assignments')]).then(function(r){return {key:n.key,logs:r[0],assignments:r[1]};});
+    return Promise.all([fbGet('/'+n.key+'/logs'), fbGet('/'+n.key+'/assignments')])
+      .then(function(r){ return {key:n.key, logs:r[0], assignments:r[1]}; });
   }))).then(function(results) {
     roster = results[0] || {};
     canvassDays = results[1] || {};
     var hoodResults = results.slice(2);
 
-    // Build date pills from canvassDays
     var dates = Object.keys(canvassDays).sort().reverse();
+    var sel = document.getElementById('date-select');
+    if (sel) {
+      dates.forEach(function(d) {
+        var o = document.createElement('option');
+        o.value = d; o.textContent = formatDate(d);
+        sel.appendChild(o);
+      });
+    }
 
-
-    // Process logs and assignments
     hoodResults.forEach(function(hood) {
       var logs = hood.logs || {};
       var assigns = hood.assignments || {};
-
-      // Process logs by date
       Object.entries(logs).forEach(function(datePair) {
         var date = datePair[0], volLogs = datePair[1];
         if (!volLogs) return;
         Object.values(volLogs).forEach(function(addrLogs) {
           if (!addrLogs) return;
           Object.entries(addrLogs).forEach(function(pair) {
-            var addrId=pair[0], log=pair[1];
-            if (!allLogs[addrId] || log.time > (allLogs[addrId].time||'')) {
+            var addrId = pair[0], log = pair[1];
+            if (!allLogs[addrId] || (log.time||'') > (allLogs[addrId].time||'')) {
               allLogs[addrId] = Object.assign({}, log, {date:date});
             }
           });
         });
       });
-
-      // Process assignments
       Object.entries(assigns).forEach(function(datePair) {
-        var date=datePair[0], volAssigns=datePair[1];
+        var date = datePair[0], volAssigns = datePair[1];
         if (!volAssigns) return;
         Object.values(volAssigns).forEach(function(assignment) {
           if (!assignment || !assignment.assignments) return;
@@ -159,122 +163,83 @@ function loadFieldData() {
       });
     });
 
-    var total = Object.keys(allLogs).length;
-    document.getElementById('field-sub').textContent = total + ' doors logged across all shifts';
+    document.getElementById('field-sub').textContent =
+      Object.keys(allLogs).length + ' doors logged across all shifts';
     initFieldMap();
-  }).catch(function(e){ document.getElementById('field-sub').textContent = 'Error loading data: '+e.message; });
+  }).catch(function(e) {
+    document.getElementById('field-sub').textContent = 'Error: ' + e.message;
+  });
+}
+
+function initFieldMap() {
+  fieldMap = L.map('field-map').setView([45.017,-93.153], 14);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 20
+  }).addTo(fieldMap);
+  var allAddrs = [];
+  (window.NEIGHBORHOODS||[]).forEach(function(n) {
+    allAddrs = allAddrs.concat(window.NEIGHBORHOOD_DATA[n.key]||[]);
+  });
+  if (allAddrs.length) {
+    var lats = allAddrs.map(function(a){ return a.lat; });
+    var lngs = allAddrs.map(function(a){ return a.lng; });
+    fieldMap.fitBounds([
+      [Math.min.apply(null,lats),Math.min.apply(null,lngs)],
+      [Math.max.apply(null,lats),Math.max.apply(null,lngs)]
+    ], {padding:[20,20]});
+  }
+  refreshFieldMarkers();
 }
 
 function setDateFilter(date) {
   activeDate = date;
-  var sel = document.getElementById('date-select');
-  if (sel) sel.value = date;
   refreshFieldMarkers();
 }
 
 function toggleShow(key) {
   showFilters[key] = !showFilters[key];
-  document.querySelector('[data-show="'+key+'"]').classList.toggle('active', showFilters[key]);
-  refreshFieldMarkers();
-}
-
-var RESULT_COLORS = {
-  'Not Home':'#64748b','Vacant':'#94a3b8','For Sale':'#7c3aed',
-  'No Soliciting':'#92400e','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb'
-};
-
-
-function safeInitMap(containerId, callback) {
-  var el = document.getElementById(containerId);
-  if (!el) return;
-  // If already has dimensions, init immediately
-  if (el.offsetWidth > 0 && el.offsetHeight > 0) {
-    callback();
-    return;
-  }
-  // Otherwise wait for it to become visible
-  if (window.ResizeObserver) {
-    var ro = new ResizeObserver(function(entries) {
-      if (el.offsetWidth > 0 && el.offsetHeight > 0) {
-        ro.disconnect();
-        callback();
-      }
-    });
-    ro.observe(el);
-  } else {
-    // Fallback: poll
-    var tries = 0;
-    var interval = setInterval(function() {
-      if (el.offsetWidth > 0 && el.offsetHeight > 0 || tries++ > 20) {
-        clearInterval(interval);
-        if (el.offsetWidth > 0) callback();
-      }
-    }, 100);
-  }
-}
-
-function initFieldMap() {
-  safeInitMap('field-map', function() {
-    fieldMap = L.map('field-map').setView([45.017,-93.153],14);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-      attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
-    }).addTo(fieldMap);
-
-  // Fit to addresses
-  var allAddrs = [];
-  (window.NEIGHBORHOODS||[]).forEach(function(n){
-    allAddrs = allAddrs.concat(window.NEIGHBORHOOD_DATA[n.key]||[]);
-  });
-  if (allAddrs.length) {
-    var lats=allAddrs.map(function(a){return a.lat;});
-    var lngs=allAddrs.map(function(a){return a.lng;});
-    fieldMap.fitBounds([[Math.min.apply(null,lats),Math.min.apply(null,lngs)],[Math.max.apply(null,lats),Math.max.apply(null,lngs)]],{padding:[20,20]});
-  }
+  var el = document.querySelector('[data-show="'+key+'"]');
+  if (el) el.classList.toggle('active', showFilters[key]);
   refreshFieldMarkers();
 }
 
 function refreshFieldMarkers() {
   if (!fieldMap) return;
-  Object.values(mapMarkers).forEach(function(m){fieldMap.removeLayer(m);});
+  Object.values(mapMarkers).forEach(function(m){ fieldMap.removeLayer(m); });
   mapMarkers = {};
-
-  (window.NEIGHBORHOODS||[]).forEach(function(n){
+  (window.NEIGHBORHOODS||[]).forEach(function(n) {
     (window.NEIGHBORHOOD_DATA[n.key]||[]).forEach(function(addr) {
       var log = allLogs[addr.id];
       var isLogged = !!log;
       var isUpcoming = !!upcomingAssigned[addr.id];
       var isNoSolic = log && log.contact === 'No Soliciting';
       var isContact = log && log.wantContact;
-
-      // Date filter
       if (activeDate !== 'all' && isLogged && log.date !== activeDate) return;
-
-      // Show filter
       if (isLogged && isNoSolic && !showFilters.nosolic) return;
       if (isLogged && !isNoSolic && !showFilters.completed) return;
       if (!isLogged && isUpcoming && !showFilters.upcoming) return;
       if (!isLogged && !isUpcoming && !showFilters['not-knocked']) return;
-      if (isContact && !showFilters.contact) return;
-
       var color, size, opacity;
+      if (isLogged) { color=RESULT_COLORS[log.contact]||'#888'; size=10; opacity=1; }
+      else if (isUpcoming) { color='#D4A832'; size=8; opacity=.7; }
+      else { color='#e0ddd3'; size=7; opacity=.5; }
+      var star = isContact ? '<span style="position:absolute;top:-6px;right:-4px;font-size:9px;color:#D4A832;">*</span>' : '';
+      var html = '<div style="position:relative;width:'+size+'px;height:'+size+'px;background:'+color+
+        ';border-radius:50%;border:1.5px solid rgba(0,0,0,.15);opacity:'+opacity+
+        ';box-shadow:0 1px 3px rgba(0,0,0,.2);">'+star+'</div>';
+      var icon = L.divIcon({className:'', html:html, iconSize:[size,size], iconAnchor:[size/2,size/2]});
+      var popup = addr.n+' '+addr.s+(addr.u?' - '+addr.u:'');
       if (isLogged) {
-        color = RESULT_COLORS[log.contact] || '#888';
-        size = 10; opacity = 1;
+        popup += '<br><strong>'+log.contact+'</strong>';
+        if (log.name) popup += ' - '+log.name;
+        if (log.phone) popup += ' - '+log.phone;
+        if (log.wantSign) popup += '<br>Wants Yard Sign';
+        if (log.wantContact) popup += '<br>Cassie to Contact';
       } else if (isUpcoming) {
-        color = '#D4A832'; size = 8; opacity = .7;
+        popup += '<br><em>Upcoming: '+formatDate(upcomingAssigned[addr.id])+'</em>';
       } else {
-        color = '#e0ddd3'; size = 7; opacity = .5;
+        popup += '<br><em>Not yet canvassed</em>';
       }
-
-      var star = isContact ? '<span style="position:absolute;top:-6px;right:-4px;font-size:9px;color:#D4A832;text-shadow:0 0 2px rgba(0,0,0,.5);">★</span>' : '';
-      var html = '<div style="position:relative;width:'+size+'px;height:'+size+'px;background:'+color+';border-radius:50%;border:1.5px solid rgba(0,0,0,.15);opacity:'+opacity+';box-shadow:0 1px 3px rgba(0,0,0,.2);">'+star+'</div>';
-      var icon = L.divIcon({className:'',html:html,iconSize:[size,size],iconAnchor:[size/2,size/2]});
-
-      var popup = addr.n+' '+addr.s+(addr.u?' · '+addr.u:'');
-      if (isLogged) popup += '<br><strong>'+log.contact+'</strong>'+(log.name?' · '+log.name:'')+(log.phone?' · '+log.phone:'')+(log.wantSign?'<br>🪧 Yard Sign':'')+(log.wantContact?'<br>📞 Cassie to Contact':'');
-      else if (isUpcoming) popup += '<br><em>Upcoming: '+formatDate(upcomingAssigned[addr.id])+'</em>';
-      else popup += '<br><em>Not yet canvassed</em>';
-
       var marker = L.marker([addr.lat,addr.lng],{icon:icon}).bindPopup(popup).addTo(fieldMap);
       mapMarkers[addr.id] = marker;
     });
@@ -288,38 +253,38 @@ function exportList(type) {
     Object.entries(allLogs).forEach(function(pair) {
       var addrId=pair[0], log=pair[1];
       if (!log.wantContact) return;
-      var addr = findAddr(addrId);
       if (activeDate !== 'all' && log.date !== activeDate) return;
-      rows.push([log.name||'',log.lastname||'',log.phone||'',log.email||'',addr?addr.n+' '+addr.s+(addr.u?' '+addr.u:''):'',log.date||'',log.notes||''].map(csvCell).join(','));
+      var addr = findAddr(addrId);
+      rows.push([log.name||'',log.lastname||'',log.phone||'',log.email||'',
+        addr?addr.n+' '+addr.s+(addr.u?' '+addr.u:''):'',log.date||'',log.notes||''].map(csvCell).join(','));
     });
   } else if (type === 'signs') {
     header = 'Address,Unit,Street,First Name,Last Name,Phone,Date';
     Object.entries(allLogs).forEach(function(pair) {
       var addrId=pair[0], log=pair[1];
       if (!log.wantSign) return;
-      var addr = findAddr(addrId);
       if (activeDate !== 'all' && log.date !== activeDate) return;
-      rows.push([addr?addr.n:'',addr?addr.u||'':'',addr?addr.s:'',log.name||'',log.lastname||'',log.phone||'',log.date||''].map(csvCell).join(','));
+      var addr = findAddr(addrId);
+      rows.push([addr?addr.n:'',addr?addr.u||'':'',addr?addr.s:'',
+        log.name||'',log.lastname||'',log.phone||'',log.date||''].map(csvCell).join(','));
     });
   } else if (type === 'nosolic') {
     header = 'Address,Unit,Street,Date';
     Object.entries(allLogs).forEach(function(pair) {
       var addrId=pair[0], log=pair[1];
       if (log.contact !== 'No Soliciting') return;
-      var addr = findAddr(addrId);
       if (activeDate !== 'all' && log.date !== activeDate) return;
+      var addr = findAddr(addrId);
       rows.push([addr?addr.n:'',addr?addr.u||'':'',addr?addr.s:'',log.date||''].map(csvCell).join(','));
     });
   }
-
   if (!rows.length) { showToast('No data to export'); return; }
   var csv = header + '\n' + rows.join('\n');
-  var blob = new Blob([csv], {type:'text/csv'});
+  var blob = new Blob([csv],{type:'text/csv'});
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
-  a.href = url; a.download = 'c4r-'+type+'-'+new Date().toISOString().slice(0,10)+'.csv';
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a);
+  a.href=url; a.download='c4r-'+type+'-'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(function(){URL.revokeObjectURL(url);},5000);
   showToast('Downloaded '+rows.length+' rows');
 }
@@ -332,11 +297,15 @@ function findAddr(id) {
   return found;
 }
 
-function csvCell(v) { return '"'+(v||'').toString().replace(/"/g,'""')+'"'; }
+function csvCell(v){ return '"'+(v||'').toString().replace(/"/g,'""')+'"'; }
 
 var _tt;
-function showToast(msg){var t=document.getElementById('toast');t.textContent=msg;t.style.opacity='1';clearTimeout(_tt);_tt=setTimeout(function(){t.style.opacity='0';},2500);}
-});
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.style.opacity='1';
+  clearTimeout(_tt);
+  _tt=setTimeout(function(){t.style.opacity='0';},2500);
+}
 </script>
 </body>
-</html>  }); // end
+</html>

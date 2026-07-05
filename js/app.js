@@ -453,13 +453,11 @@ function saveAssignments() {
 
 // ── ADMIN MAP ─────────────────────────────
 function initAdminMap() {
-  safeInitMap('admin-map', function() {
-    adminMap = L.map('admin-map', {center:[45.017,-93.153], zoom:15});
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-      attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
-    }).addTo(adminMap);
-    // Selection via map pin clicks and checklist only
-  }); // end safeInitMap
+  adminMap = L.map('admin-map', {center:[45.017,-93.153], zoom:15});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
+  }).addTo(adminMap);
+  // Selection via map pin clicks and checklist only
 }
 function adminMarkerColor(addr) {
   if (adminMapView==='all') {
@@ -1078,13 +1076,11 @@ function saveAssignments() {
 
 // ── ADMIN MAP ─────────────────────────────
 function initAdminMap() {
-  safeInitMap('admin-map', function() {
-    adminMap = L.map('admin-map', {center:[45.017,-93.153], zoom:15});
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-      attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
-    }).addTo(adminMap);
-    // Selection via map pin clicks and checklist only
-  }); // end safeInitMap
+  adminMap = L.map('admin-map', {center:[45.017,-93.153], zoom:15});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
+  }).addTo(adminMap);
+  // Selection via map pin clicks and checklist only
 }
 function adminMarkerColor(addr) {
   if (adminMapView==='all') {
@@ -1347,33 +1343,12 @@ function saveAndExit() {
 
 // ── CANVASSER MAP ─────────────────────────
 
-function safeInitMap(containerId, callback) {
-  var el = document.getElementById(containerId);
-  if (!el) return;
-  if (el.offsetWidth > 0 && el.offsetHeight > 0) { callback(); return; }
-  if (window.ResizeObserver) {
-    var ro = new ResizeObserver(function() {
-      if (el.offsetWidth > 0 && el.offsetHeight > 0) { ro.disconnect(); callback(); }
-    });
-    ro.observe(el);
-  } else {
-    var tries = 0;
-    var iv = setInterval(function() {
-      if (el.offsetWidth > 0 && el.offsetHeight > 0 || tries++ > 30) {
-        clearInterval(iv);
-        if (el.offsetWidth > 0) callback();
-      }
-    }, 100);
-  }
-}
-
 function initMap(){
-  safeInitMap('map', function(){
-    map=L.map('map',{center:[45.017,-93.153],zoom:15});
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20}).addTo(map);
-    map.whenReady(function(){
-      addresses.forEach(function(addr){markers[addr.id]=createMarker(addr);});
-      fitBounds(); renderMyList(); renderAllList(); renderLog(); updateStats();
+  map=L.map('map',{center:[45.017,-93.153],zoom:15});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20}).addTo(map);
+  map.whenReady(function(){
+    addresses.forEach(function(addr){markers[addr.id]=createMarker(addr);});
+    fitBounds(); renderMyList(); renderAllList(); renderLog(); updateStats();
   });
   map.on('click',function(e){
     if(mode!=='signs') return;
@@ -1382,7 +1357,6 @@ function initMap(){
     document.getElementById('sign-addr').value=''; document.getElementById('sign-notes').value='';
     openOverlay('sign-overlay');
   });
-  }); // end safeInitMap
 }
 
 function fitBounds(){
