@@ -306,24 +306,35 @@ function renderCanvasserView(id) {
   if (!route.length) {
     listEl.innerHTML='<div style="padding:16px;color:var(--subtle);font-size:13px;">No addresses assigned.</div>';
   } else {
+    var CONTACTS = ['Not Home','Vacant','For Sale','No Soliciting','Refused','Accepted','Other Language'];
     listEl.innerHTML = route.map(function(addrId, i) {
       var addr = addrMap[addrId];
       if (!addr) return '';
       var log = volLogs[addrId];
       var resultColor = log ? (RESULT_COLORS[log.contact]||'#888') : null;
-      return '<div class="addr-log-row">'
-        + '<div class="addr-log-num">'+(i+1)+'.</div>'
-        + '<div style="flex:1;min-width:0;">'
+      var contactOpts = CONTACTS.map(function(c){
+        return '<option value="'+c+'"'+(log&&log.contact===c?' selected':'')+'>'+c+'</option>';
+      }).join('');
+      return '<div class="addr-log-row" data-addr-id="'+addrId+'" style="flex-direction:column;align-items:flex-start;">'
+        + '<div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:6px;">'
+          + '<div class="addr-log-num">'+(i+1)+'.</div>'
           + '<div class="addr-log-addr">'+addr.n+' '+addr.s+(addr.u?' &middot; '+addr.u:'')+'</div>'
-          + (log
-            ? '<div style="margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">'
-                + '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;background:'+resultColor+'22;color:'+resultColor+';">'+log.contact+'</span>'
-                + (log.wantContact?'<span style="font-size:10px;font-weight:700;color:var(--gold-acc);">📞 '+( log.name||'Contact')+'</span>':'')
-                + (log.wantSign?'<span style="font-size:10px;font-weight:700;color:var(--gold-acc);">🪧 Sign</span>':'')
-                + (log.stopBy?'<span style="font-size:10px;font-weight:700;color:var(--gold-acc);">🚶 Stop by</span>':'')
-                + (log.notes?'<div class="addr-log-note">'+log.notes+'</div>':'')
-              + '</div>'
-            : '<div class="not-knocked">Not knocked</div>')
+          + (log?'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;background:'+resultColor+'22;color:'+resultColor+';">'+log.contact+'</span>':'<span class="not-knocked">Not knocked</span>')
+        + '</div>'
+        + '<div style="display:flex;flex-wrap:wrap;gap:6px;width:100%;padding-left:24px;">'
+          + '<select class="form-input log-contact" data-addr-id="'+addrId+'" style="font-size:11px;padding:4px 8px;width:auto;flex-shrink:0;">'
+            + '<option value="">— Result —</option>'+contactOpts
+          + '</select>'
+          + '<input class="form-input log-name" data-addr-id="'+addrId+'" type="text" placeholder="First name" value="'+(log&&log.name?log.name:'')+'" style="font-size:11px;padding:4px 8px;width:110px;flex-shrink:0;">'
+          + '<input class="form-input log-phone" data-addr-id="'+addrId+'" type="tel" placeholder="Phone" value="'+(log&&log.phone?log.phone:'')+'" style="font-size:11px;padding:4px 8px;width:110px;flex-shrink:0;">'
+          + '<input class="form-input log-notes" data-addr-id="'+addrId+'" type="text" placeholder="Notes" value="'+(log&&log.notes?log.notes:'')+'" style="font-size:11px;padding:4px 8px;flex:1;min-width:120px;">'
+          + '<label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">'
+            + '<input type="checkbox" class="log-sign" data-addr-id="'+addrId+'"'+(log&&log.wantSign?' checked':'')+'>🪧 Sign'
+          + '</label>'
+          + '<label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">'
+            + '<input type="checkbox" class="log-contact-flag" data-addr-id="'+addrId+'"'+(log&&log.wantContact?' checked':'')+'>📞 Contact'
+          + '</label>'
+          + '<button class="log-save-btn" data-addr-id="'+addrId+'" onclick="_saveLog(this.dataset.addrId)" style="font-size:11px;font-weight:700;padding:4px 10px;background:var(--gold);border:none;border-radius:6px;cursor:pointer;">Save</button>'
         + '</div>'
       + '</div>';
     }).join('');
@@ -590,6 +601,57 @@ function printWalkSheet() {
     if(!w) showToast('Allow popups to print');
     setTimeout(function(){URL.revokeObjectURL(url);},60000);
   } catch(e){showToast('Print error: '+e.message);}
+}
+
+function _saveLog(id){ saveAddrLog(id); }
+function saveAddrLog(addrId) {
+  var contact = document.querySelector('.log-contact[data-addr-id="'+addrId+'"]');
+  var name = document.querySelector('.log-name[data-addr-id="'+addrId+'"]');
+  var phone = document.querySelector('.log-phone[data-addr-id="'+addrId+'"]');
+  var notes = document.querySelector('.log-notes[data-addr-id="'+addrId+'"]');
+  var sign = document.querySelector('.log-sign[data-addr-id="'+addrId+'"]');
+  var contactFlag = document.querySelector('.log-contact-flag[data-addr-id="'+addrId+'"]');
+
+  if (!contact || !contact.value) { showToast('Select a contact result first'); return; }
+
+  var existing = (allLogs[currentCanvasserId]||{})[addrId] || {};
+  var entry = Object.assign({}, existing, {
+    contact: contact.value,
+    name: name ? name.value.trim() : '',
+    phone: phone ? phone.value.trim() : '',
+    notes: notes ? notes.value.trim() : '',
+    wantSign: sign ? sign.checked : false,
+    wantContact: contactFlag ? contactFlag.checked : false,
+    canvasser: currentCanvasserId,
+    volId: currentCanvasserId,
+    time: existing.time || new Date().toISOString(),
+  });
+
+  var path = '/'+shiftData.neighborhood+'/logs/'+shiftDate+'/'+currentCanvasserId+'/'+addrId;
+  fbPut(path, entry).then(function() {
+    if (!allLogs[currentCanvasserId]) allLogs[currentCanvasserId] = {};
+    allLogs[currentCanvasserId][addrId] = entry;
+    showToast('Saved');
+    // Update the result badge inline
+    var row = document.querySelector('.addr-log-row[data-addr-id="'+addrId+'"]');
+    if (row) {
+      var badge = row.querySelector('.addr-log-num');
+      // Refresh the whole canvasser view stats
+      var volLogs2 = allLogs[currentCanvasserId]||{};
+      var logs2 = Object.values(volLogs2);
+      var accepted2=logs2.filter(function(l){return l.contact==='Accepted';}).length;
+      var contact2=logs2.filter(function(l){return l.wantContact;}).length;
+      var signs2=logs2.filter(function(l){return l.wantSign;}).length;
+      var nosolic2=logs2.filter(function(l){return l.contact==='No Soliciting';}).length;
+      document.getElementById('cv-stats').innerHTML =
+        statCard(logs2.length,'Doors Knocked')+
+        statCard((allAssignments[currentCanvasserId]&&allAssignments[currentCanvasserId].route?allAssignments[currentCanvasserId].route.length:0),'Assigned')+
+        statCard(accepted2,'Accepted','#27ae60')+
+        statCard(contact2,'Cassie to Contact','#D4A832')+
+        statCard(signs2,'Yard Signs','#D4A832')+
+        statCard(nosolic2,'No Soliciting','#c0392b');
+    }
+  }).catch(function(){ showToast('Save failed'); });
 }
 
 var _tt;

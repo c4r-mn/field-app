@@ -10,7 +10,7 @@
   --prop-apartment:#2563eb;--prop-mobile:#7c3aed;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-html,body{height:100%;font-family:'Outfit',sans-serif;background:var(--cream);color:var(--text);overflow:hidden;}
+html,body{height:100%;font-family:'Outfit',sans-serif;background:var(--cream);color:var(--text);}
 #app{display:flex;flex-direction:column;height:100vh;}
 
 #topbar{background:var(--white);border-bottom:3px solid var(--gold);padding:8px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index:800;box-shadow:0 2px 8px rgba(0,0,0,.08);}
@@ -322,7 +322,7 @@ body{padding-top:36px;} /* account for user bar */
   padding:16px;font-size:13px;color:var(--red);font-weight:600;max-width:300px;line-height:1.5;}
 
 /* Admin layout */
-.admin-layout{display:flex;min-height:calc(100vh - 36px);width:100%;}
+.admin-layout{display:flex;min-height:calc(100vh - 36px);width:100%;overflow-y:auto;}
 .admin-sidebar{width:220px;background:var(--white);border-right:2px solid var(--border);
   flex-shrink:0;display:flex;flex-direction:column;position:fixed;top:36px;bottom:0;left:0;
   overflow-y:auto;z-index:100;}
