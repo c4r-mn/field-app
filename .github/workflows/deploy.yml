@@ -1,4 +1,4 @@
-name: Build and Deploy
+name: Build and Deploy to GitHub Pages
 
 on:
   push:
@@ -12,23 +12,19 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: "pages"
+  cancel-in-progress: true
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Generate config.json from secrets
         run: |
-          cat > config.json << EOF
+          cat > config.json << JSONEOF
           {
             "firebase": {
               "apiKey": "${{ secrets.FIREBASE_API_KEY }}",
@@ -41,16 +37,23 @@ jobs:
             },
             "adminEmails": ["${{ secrets.ADMIN_EMAILS }}"]
           }
-          EOF
+          JSONEOF
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload artifact
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: '.'
 
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
