@@ -7,11 +7,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
   <link rel="stylesheet" href="/field-app/css/app.css">
+  <style>
+    #app{overflow:hidden;height:calc(100vh - 36px);}
+    #setup-screen{overflow-y:auto;}
+  </style>
   <script>
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/field-app/sw.js');
   </script>
 </head>
-<body style="overflow:hidden;">
+<body>
 
 <div id="user-bar">
   <span id="user-bar-name"></span>
