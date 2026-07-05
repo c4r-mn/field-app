@@ -1194,9 +1194,12 @@ function printWalkSheet() {
     '</body></html>';
 
   try {
-    var w = window.open('', '_blank');
-    if (w) { w.document.write(body); w.document.close(); }
-    else { showToast('Allow popups to print walk sheets'); }
+    var blob = new Blob([body], {type: 'text/html'});
+    var url = URL.createObjectURL(blob);
+    var w = window.open(url, '_blank');
+    if (!w) { showToast('Allow popups to print walk sheets'); }
+    // Revoke after delay to allow print dialog
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
   } catch(e) {
     showToast('Print error: ' + e.message);
   }
@@ -1277,3 +1280,5 @@ function formatDate(dateStr) {
 
 // ── BOOT ──────────────────────────────────
 // Boot handled by js/auth.js
+
+
