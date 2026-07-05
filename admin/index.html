@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Cassie for Roseville Field App</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/app.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
+</head>
+<body>
+
+<div id="user-bar">
+  <span id="user-bar-name"></span>
+  <div class="user-bar-right">
+    <button class="signout-btn" onclick="doSignOut()">Sign Out</button>
+  </div>
+</div>
+
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <div class="admin-sidebar-brand">
+      <div class="brand-name">🌹 Cassie for Roseville</div>
+      <div class="brand-sub">Field Operations Admin</div>
+    </div>
+    <nav class="admin-nav">
+      <div class="admin-nav-section">Overview</div>
+      <a href="/field-app/admin/" class="admin-nav-link active"><span class="admin-nav-icon">🗺</span> Dashboard</a>
+      <div class="admin-nav-section">Operations</div>
+      <a href="/field-app/admin/shifts.html" class="admin-nav-link"><span class="admin-nav-icon">📅</span> Shifts</a>
+      <a href="/field-app/admin/roster.html" class="admin-nav-link"><span class="admin-nav-icon">👥</span> Roster</a>
+      <div class="admin-nav-section">Field</div>
+      <a href="/field-app/admin/field.html" class="admin-nav-link"><span class="admin-nav-icon">📍</span> Field View</a>
+    </nav>
+  </aside>
+  <div class="mobile-nav">
+    <a href="/field-app/admin/" class="mobile-nav-link active">Dashboard</a>
+    <a href="/field-app/admin/shifts.html" class="mobile-nav-link">Shifts</a>
+    <a href="/field-app/admin/roster.html" class="mobile-nav-link">Roster</a>
+    <a href="/field-app/admin/field.html" class="mobile-nav-link">Field View</a>
+  </div>
+  <main class="admin-content">
+
+    <div class="admin-page-header">
+      <div class="admin-page-title">Dashboard</div>
+      <div class="admin-page-sub" id="dash-date"></div>
+    </div>
+
+    <!-- Quick actions -->
+    <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+      <a href="/field-app/admin/shifts.html?new=1" class="btn btn-gold">+ New Shift</a>
+      <a href="/field-app/admin/roster.html" class="btn btn-outline">Edit Roster</a>
+      <a href="/field-app/admin/field.html" class="btn btn-ghost">Field View</a>
+    </div>
+
+    <!-- Stats -->
+    <div class="stat-row" id="dash-stats">
+      <div class="stat-card"><div class="stat-n" id="stat-doors">—</div><div class="stat-l">Doors Knocked</div></div>
+      <div class="stat-card"><div class="stat-n" id="stat-accepted" style="color:var(--green);">—</div><div class="stat-l">Accepted</div></div>
+      <div class="stat-card"><div class="stat-n" id="stat-contact" style="color:var(--gold-acc);">—</div><div class="stat-l">Cassie to Contact</div></div>
+      <div class="stat-card"><div class="stat-n" id="stat-signs" style="color:var(--gold-acc);">—</div><div class="stat-l">Yard Signs</div></div>
+      <div class="stat-card"><div class="stat-n" id="stat-nosolic" style="color:var(--red);">—</div><div class="stat-l">No Soliciting</div></div>
+      <div class="stat-card"><div class="stat-n" id="stat-volunteers">—</div><div class="stat-l">Volunteers</div></div>
+    </div>
+
+    <!-- Mini field map -->
+    <div class="page-card">
+      <div class="page-card-title">
+        Today's Field Activity
+        <a href="/field-app/admin/field.html" class="btn btn-ghost btn-sm">Full Field View →</a>
+      </div>
+      <div id="dash-map" style="height:320px;border-radius:8px;border:1px solid var(--border);"></div>
+    </div>
+
+    <!-- Upcoming shifts -->
+    <div class="page-card">
+      <div class="page-card-title">
+        Upcoming Shifts
+        <a href="/field-app/admin/shifts.html" class="btn btn-ghost btn-sm">All Shifts →</a>
+      </div>
+      <div id="dash-shifts">
+        <div style="color:var(--subtle);font-size:13px;">Loading shifts…</div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV/XN2GqNs=" crossorigin="anonymous"></script>
+<script src="/field-app/js/firebase.js"></script>
+<script src="/field-app/js/auth.js"></script>
+<script src="/field-app/js/data.js"></script>
+<script>
+var dashMap = null;
+var roster = {};
+var canvassDays = {};
+var today = new Date().toISOString().slice(0,10);
+
+document.getElementById('dash-date').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+
+initAuth(
+  function(user) { loadDashboard(); },
+  function(user) { window.location.href = '/field-app/canvass.html'; }
+);
+
+function loadDashboard() {
+  setFbBase();
+  // Load roster and shifts in parallel
+  Promise.all([fbGet('/roster'), fbGet('/canvass-days')]).then(function(results) {
+    roster = results[0] || {};
+    canvassDays = results[1] || {};
+    renderShifts();
+    loadStats();
+    initDashMap();
+  });
+}
+
+function volName(id) {
+  return roster[id] ? roster[id].name : id;
+}
+
+function renderShifts() {
+  var upcoming = Object.entries(canvassDays)
+    .filter(function(p){ return p[0] >= today; })
+    .sort(function(a,b){ return a[0].localeCompare(b[0]); })
+    .slice(0, 5);
+
+  var el = document.getElementById('dash-shifts');
+  if (!upcoming.length) {
+    el.innerHTML = '<div style="color:var(--subtle);font-size:13px;">No upcoming shifts. <a href="/field-app/admin/shifts.html?new=1" style="color:var(--gold-acc);font-weight:700;">Create one →</a></div>';
+    return;
+  }
+
+  el.innerHTML = upcoming.map(function(pair) {
+    var date = pair[0], day = pair[1];
+    var hood = (window.NEIGHBORHOODS||[]).find(function(n){return n.key===day.neighborhood;});
+    var hoodName = hood ? hood.displayName : (day.neighborhood||'');
+    var vols = (day.volunteers||[]).map(volName);
+    var d = new Date(date+'T12:00:00');
+    var dayNum = d.getDate();
+    var mon = d.toLocaleDateString('en-US',{month:'short'});
+    return '<div class="shift-item" style="cursor:pointer;" onclick="location.href=\'/field-app/admin/shift.html?date='+date+'\'">' +
+      '<div class="shift-date-badge"><div class="day">'+dayNum+'</div><div class="month">'+mon+'</div></div>' +
+      '<div class="shift-info">' +
+        '<div class="shift-hood">'+hoodName+(day.notes?' · '+day.notes:'')+'</div>' +
+        '<div class="shift-meta">'+formatDate(date)+'</div>' +
+        (vols.length?'<div class="shift-vols">'+vols.map(function(n){return '<span class="shift-vol-pill">'+n+'</span>';}).join('')+'</div>':'') +
+      '</div>' +
+      '<div class="shift-actions">' +
+        '<a href="/field-app/admin/shift.html?date='+date+'" class="btn btn-ghost btn-sm">View</a>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function loadStats() {
+  // Load all logs across all neighborhoods and dates
+  var promises = (window.NEIGHBORHOODS||[]).map(function(n) {
+    return fbGet('/'+n.key+'/logs').catch(function(){return null;});
+  });
+  Promise.all(promises).then(function(results) {
+    var doors=0, accepted=0, contact=0, signs=0, nosolic=0;
+    results.forEach(function(hoodLogs) {
+      if (!hoodLogs) return;
+      Object.values(hoodLogs).forEach(function(dayLogs) {
+        Object.values(dayLogs).forEach(function(volLogs) {
+          Object.values(volLogs).forEach(function(log) {
+            doors++;
+            if (log.contact==='Accepted') accepted++;
+            if (log.wantContact) contact++;
+            if (log.wantSign) signs++;
+            if (log.contact==='No Soliciting') nosolic++;
+          });
+        });
+      });
+    });
+    document.getElementById('stat-doors').textContent = doors;
+    document.getElementById('stat-accepted').textContent = accepted;
+    document.getElementById('stat-contact').textContent = contact;
+    document.getElementById('stat-signs').textContent = signs;
+    document.getElementById('stat-nosolic').textContent = nosolic;
+    document.getElementById('stat-volunteers').textContent = Object.values(roster).filter(function(v){return v.status==='active';}).length;
+  });
+}
+
+function initDashMap() {
+  dashMap = L.map('dash-map', {zoomControl:true}).setView([45.017,-93.153], 14);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
+  }).addTo(dashMap);
+
+  var COLORS = {'Not Home':'#64748b','Vacant':'#475569','For Sale':'#7c3aed',
+    'No Soliciting':'#92400e','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb'};
+
+  (window.NEIGHBORHOODS||[]).forEach(function(n) {
+    fbGet('/'+n.key+'/logs/'+today).then(function(dayLogs) {
+      if (!dayLogs) return;
+      Object.values(dayLogs).forEach(function(volLogs) {
+        if (!volLogs) return;
+        Object.entries(volLogs).forEach(function(pair) {
+          var addrId = pair[0], log = pair[1];
+          var addr = (window.NEIGHBORHOOD_DATA[n.key]||[]).find(function(a){return a.id===addrId;});
+          if (!addr) return;
+          var color = COLORS[log.contact] || '#888';
+          var extraPin = log.wantContact ? '<div style="position:absolute;top:-4px;right:-4px;width:8px;height:8px;background:#D4A832;border-radius:50%;border:1px solid #fff;"></div>' : '';
+          var icon = L.divIcon({className:'',html:'<div style="position:relative;width:12px;height:12px;background:'+color+';border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);">'+extraPin+'</div>',iconSize:[12,12],iconAnchor:[6,6]});
+          L.marker([addr.lat,addr.lng],{icon:icon})
+           .bindTooltip(addr.n+' '+addr.s+' — '+log.contact)
+           .addTo(dashMap);
+        });
+      });
+    });
+  });
+}
+</script>
+</body>
+</html>
