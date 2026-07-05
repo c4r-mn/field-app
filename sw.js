@@ -1,5 +1,5 @@
 // Cassie for Roseville — Field App Service Worker
-var CACHE = 'c4r-v1';
+var CACHE = 'c4r-v3';
 var STATIC = [
   '/field-app/',
   '/field-app/index.html',
@@ -34,7 +34,9 @@ self.addEventListener('activate', function(e) {
 });
 
 self.addEventListener('fetch', function(e) {
-  // Never cache Firebase or Google requests
+  // Only handle http/https requests
+  if (!e.request.url.startsWith('http')) return;
+  // Never cache Firebase, Google, or config
   if (e.request.url.indexOf('firebase') !== -1 ||
       e.request.url.indexOf('google') !== -1 ||
       e.request.url.indexOf('config.json') !== -1) {
