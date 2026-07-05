@@ -1,36 +1,51 @@
-// Firebase config — safe to be public (security enforced by Firebase rules)
-// Admin emails determine who gets admin UI vs canvasser UI
-var FIREBASE_CONFIG = {
-  apiKey: "AIzaSyAug-z3reeIeiOsMqRWo5SH5l-w7xCz9bA",
-  authDomain: "canvas-c4r.firebaseapp.com",
-  databaseURL: "https://canvas-c4r-default-rtdb.firebaseio.com",
-  projectId: "canvas-c4r",
-  storageBucket: "canvas-c4r.firebasestorage.app",
-  messagingSenderId: "832444035787",
-  appId: "1:832444035787:web:f9aa34afea27015dd0614e",
-};
+// ── EMERGENCY ESCAPE HATCH ───────────────────────────────────────────────────
+// Add ?signout=1 to URL to force sign out regardless of state
+if (window.location.search.indexOf('signout=1') !== -1) {
+  // Clear all Firebase auth state from localStorage
+  Object.keys(localStorage).forEach(function(k) {
+    if (k.indexOf('firebase') !== -1) localStorage.removeItem(k);
+  });
+  // Redirect to clean URL
+  window.location.href = window.location.pathname;
+}
 
-var ADMIN_EMAILS = [
-  'campaign@cassie4roseville.com',
-];
-
-// Make available globally for app.js
-window.FIREBASE_CONFIG = FIREBASE_CONFIG;
-window.ADMIN_EMAILS = ADMIN_EMAILS;
+// Config is loaded from config.json at runtime (gitignored — never committed)
+// If config.json is missing, the app shows an error
+var FIREBASE_CONFIG = null;
+var ADMIN_EMAILS = [];
 
 // Cassie for Roseville — Field App
 // Authentication — Firebase Auth (compat SDK, regular script)
 
 // Wait for Firebase to be ready
 function initAuth() {
-  if (typeof firebase === 'undefined' || !window.FIREBASE_CONFIG) {
+  if (typeof firebase === 'undefined') {
     setTimeout(initAuth, 100);
     return;
   }
 
-  // Initialize Firebase if not already done
+  // Load config.json at runtime (never committed to repo)
+  fetch('config.json?nocache=' + Date.now())
+    .then(function(r) {
+      if (!r.ok) throw new Error('config.json not found');
+      return r.json();
+    })
+    .then(function(cfg) {
+      FIREBASE_CONFIG = cfg.firebase;
+      ADMIN_EMAILS = cfg.adminEmails || [];
+      window.FIREBASE_CONFIG = FIREBASE_CONFIG;
+      window.ADMIN_EMAILS = ADMIN_EMAILS;
+      startFirebase();
+    })
+    .catch(function(e) {
+      var bar = document.getElementById('debug-bar');
+      if (bar) { bar.style.display='block'; bar.textContent='Config error: ' + e.message + '\nUpload config.json to the repo root.'; }
+    });
+}
+
+function startFirebase() {
   if (!firebase.apps.length) {
-    firebase.initializeApp(window.FIREBASE_CONFIG);
+    firebase.initializeApp(FIREBASE_CONFIG);
   }
 
   var auth = firebase.auth();
@@ -47,6 +62,8 @@ function initAuth() {
     document.getElementById('admin-screen').style.display = 'none';
     document.getElementById('setup-screen').style.display = 'none';
     document.getElementById('app').style.display = 'none';
+    var ub = document.getElementById('user-bar');
+    if (ub) ub.style.display = 'none';
     clearAuthError();
     var eb = document.getElementById('auth-btn-email');
     var gb = document.getElementById('auth-btn-google');
@@ -111,7 +128,15 @@ function initAuth() {
 
   // ── AUTH STATE ───────────────────────────────────────────────────────────────
   auth.onAuthStateChanged(function(user) {
-    if (!user) { showAuthScreen(); return; }
+    var userBar = document.getElementById('user-bar');
+    var nameEl = document.getElementById('user-bar-name');
+    if (!user) {
+      if (nameEl) nameEl.textContent = 'Not signed in';
+      showAuthScreen();
+      return;
+    }
+    // Update user bar immediately — before anything else that could crash
+    if (nameEl) nameEl.textContent = (user.displayName || user.email || 'Signed in') + ' — tap Sign Out to switch accounts';
 
     var email = user.email || '';
     var displayName = user.displayName || email.split('@')[0];
@@ -124,12 +149,20 @@ function initAuth() {
       isAdmin: admin
     };
 
+    // Update user bar with role info
+    if (nameEl) nameEl.textContent = displayName + ' (' + (admin ? 'Admin' : 'Canvasser') + ') — Sign Out to switch';
+
     document.getElementById('auth-screen').style.display = 'none';
 
-    if (admin) {
-      if (typeof initFirebaseAdmin === 'function') initFirebaseAdmin();
-    } else {
-      if (typeof initFirebaseCanvasser === 'function') initFirebaseCanvasser();
+    try {
+      if (admin) {
+        if (typeof initFirebaseAdmin === 'function') initFirebaseAdmin();
+      } else {
+        if (typeof initFirebaseCanvasser === 'function') initFirebaseCanvasser();
+      }
+    } catch(e) {
+      var bar = document.getElementById('debug-bar');
+      if (bar) { bar.style.display='block'; bar.textContent='ERROR after login: '+e.message+' (line '+e.lineNumber+')\n'; }
     }
   });
 
