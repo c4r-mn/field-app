@@ -190,6 +190,8 @@ function initDashMap() {
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
     attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
   }).addTo(dashMap);
+  // Force size recalculation after layout settles
+  setTimeout(function(){ dashMap.invalidateSize(); }, 200);
 
   var COLORS = {'Not Home':'#64748b','Vacant':'#475569','For Sale':'#7c3aed',
     'No Soliciting':'#92400e','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb'};

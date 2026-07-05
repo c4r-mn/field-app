@@ -231,6 +231,7 @@ function initShiftMap() {
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
     attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
   }).addTo(shiftMap);
+  setTimeout(function(){ shiftMap.invalidateSize(); }, 300);
   if (adminAddresses.length) {
     var lats=adminAddresses.map(function(a){return a.lat;});
     var lngs=adminAddresses.map(function(a){return a.lng;});
@@ -299,17 +300,19 @@ function renderChecklist() {
   var routeHtml = adminRoute.map(function(id,i) {
     var addr=addrMap[id]; if(!addr) return '';
     var meta=PROP_META[addr.t]||PROP_META.house;
-    var isFirst=i===0,isLast=i===adminRoute.length-1;
-    return '<div style="display:flex;align-items:center;gap:6px;padding:7px 10px;border-bottom:1px solid #f0ede4;min-height:44px;border-left:3px solid var(--gold);">' +
-      '<div style="display:flex;flex-direction:column;gap:1px;width:20px;">' +
-        '<button data-rid="'+id+'" data-dir="-1" onclick="moveRoute(this.dataset.rid,parseInt(this.dataset.dir))" '+(isFirst?'disabled':'')+' style="border:none;background:none;cursor:pointer;color:'+(isFirst?'#ddd':'var(--gold-acc)')+';font-size:13px;padding:1px;line-height:1;">▲</button>' +
-        '<button data-rid="'+id+'" data-dir="1" onclick="moveRoute(this.dataset.rid,parseInt(this.dataset.dir))" '+(isLast?'disabled':'')+' style="border:none;background:none;cursor:pointer;color:'+(isLast?'#ddd':'var(--gold-acc)')+';font-size:13px;padding:1px;line-height:1;">▼</button>' +
-      '</div>' +
-      '<div style="width:10px;height:10px;border-radius:50%;background:var(--gold);flex-shrink:0;" data-aid="'+id+'" onclick="toggleAddr(this.dataset.aid)"></div>' +
+    return '<div class="route-item" draggable="true" data-id="'+id+'" ' +
+      'ondragstart="routeDragStart(event,''+id+'')" ' +
+      'ondragover="routeDragOver(event)" ' +
+      'ondrop="routeDrop(event,''+id+'')" ' +
+      'ondragend="routeDragEnd(event)" ' +
+      'style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #f0ede4;min-height:44px;border-left:3px solid var(--gold);cursor:grab;background:#fff;">' +
+      '<div style="color:#ccc;font-size:16px;cursor:grab;flex-shrink:0;" title="Drag to reorder">⠿</div>' +
+      '<div style="width:10px;height:10px;border-radius:50%;background:var(--gold);flex-shrink:0;cursor:pointer;" data-aid="'+id+'" onclick="toggleAddr(this.dataset.aid)"></div>' +
       '<div style="flex:1;min-width:0;">' +
         '<div style="font-size:12px;font-weight:700;"><span style="color:var(--gold-acc);margin-right:4px;">'+(i+1)+'.</span>'+addr.n+' '+addr.s+(addr.u?' · '+addr.u:'')+'</div>' +
         '<div style="font-size:10px;color:var(--subtle);">'+meta.label+'</div>' +
       '</div>' +
+      '<button data-aid="'+id+'" onclick="toggleAddr(this.dataset.aid)" style="border:none;background:none;cursor:pointer;color:var(--red);font-size:16px;padding:4px;flex-shrink:0;" title="Remove">×</button>' +
     '</div>';
   }).join('');
 
@@ -444,6 +447,38 @@ function printWalkSheetFromShift() {
     if (!w) showToast('Allow popups to print');
     setTimeout(function(){URL.revokeObjectURL(url);},60000);
   } catch(e){ showToast('Print error: '+e.message); }
+}
+
+// ── DRAG AND DROP REORDER ─────────────────────────────────────────────────────
+var _dragId = null;
+function routeDragStart(e, id) {
+  _dragId = id;
+  e.currentTarget.style.opacity = '0.5';
+  e.dataTransfer.effectAllowed = 'move';
+}
+function routeDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.style.background = '#fdf6e0';
+}
+function routeDrop(e, targetId) {
+  e.preventDefault();
+  e.currentTarget.style.background = '#fff';
+  if (!_dragId || _dragId === targetId) return;
+  var fromIdx = adminRoute.indexOf(_dragId);
+  var toIdx = adminRoute.indexOf(targetId);
+  if (fromIdx === -1 || toIdx === -1) return;
+  adminRoute.splice(fromIdx, 1);
+  adminRoute.splice(toIdx, 0, _dragId);
+  document.getElementById('assign-status').textContent = adminRoute.length + ' addresses in route';
+  refreshMapMarkers();
+  renderChecklist();
+}
+function routeDragEnd(e) {
+  _dragId = null;
+  document.querySelectorAll('.route-item').forEach(function(el){
+    el.style.opacity = '1'; el.style.background = '#fff';
+  });
 }
 
 var _tt;

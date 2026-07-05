@@ -56,8 +56,9 @@
     <!-- Filters -->
     <div class="field-filters">
       <span style="font-size:11px;font-weight:700;color:var(--muted);">Date:</span>
-      <div class="filter-pill active" data-date="all" onclick="setDateFilter('all')">All Dates</div>
-      <div id="date-pills"></div>
+      <select id="date-select" class="form-input" style="width:auto;padding:5px 10px;font-size:12px;" onchange="setDateFilter(this.value)">
+        <option value="all">All Dates</option>
+      </select>
       <span style="font-size:11px;font-weight:700;color:var(--muted);margin-left:8px;">Show:</span>
       <div class="filter-pill active" data-show="completed" onclick="toggleShow('completed')">✅ Completed</div>
       <div class="filter-pill active" data-show="not-knocked" onclick="toggleShow('not-knocked')">⬜ Not Knocked</div>
@@ -122,9 +123,7 @@ function loadFieldData() {
 
     // Build date pills from canvassDays
     var dates = Object.keys(canvassDays).sort().reverse();
-    document.getElementById('date-pills').innerHTML = dates.map(function(d){
-      return '<div class="filter-pill" data-date="'+d+'" onclick="setDateFilter(\''+d+'\')">'+formatDate(d)+'</div>';
-    }).join('');
+
 
     // Process logs and assignments
     hoodResults.forEach(function(hood) {
@@ -168,9 +167,8 @@ function loadFieldData() {
 
 function setDateFilter(date) {
   activeDate = date;
-  document.querySelectorAll('[data-date]').forEach(function(el){
-    el.classList.toggle('active', el.dataset.date === date);
-  });
+  var sel = document.getElementById('date-select');
+  if (sel) sel.value = date;
   refreshFieldMarkers();
 }
 
@@ -190,6 +188,7 @@ function initFieldMap() {
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
     attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
   }).addTo(fieldMap);
+  setTimeout(function(){ fieldMap.invalidateSize(); }, 200);
 
   // Fit to addresses
   var allAddrs = [];
