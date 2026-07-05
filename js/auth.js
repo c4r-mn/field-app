@@ -25,6 +25,11 @@ function initAuth() {
   }
 
   // Load config.json at runtime (never committed to repo)
+  // Show loading state
+  var authScreen = document.getElementById('auth-screen');
+  if (authScreen) authScreen.style.display = 'flex';
+  showInitError('Loading configuration…');
+
   fetch('config.json?nocache=' + Date.now())
     .then(function(r) {
       if (!r.ok) throw new Error('config.json not found');
@@ -35,11 +40,19 @@ function initAuth() {
       ADMIN_EMAILS = cfg.adminEmails || [];
       window.FIREBASE_CONFIG = FIREBASE_CONFIG;
       window.ADMIN_EMAILS = ADMIN_EMAILS;
+      showInitError(''); // clear loading message
       startFirebase();
     })
     .catch(function(e) {
       var bar = document.getElementById('debug-bar');
-      if (bar) { bar.style.display='block'; bar.textContent='Config error: ' + e.message + '\nUpload config.json to the repo root.'; }
+      if (bar) {
+        bar.style.display='block';
+        bar.textContent='Config error: ' + e.message + '\nThe workflow may not have generated config.json. Check GitHub Actions logs.';
+      }
+      // Show auth screen anyway so user can see the error
+      var authScreen = document.getElementById('auth-screen');
+      if (authScreen) authScreen.style.display = 'flex';
+      showInitError('Configuration failed to load. Contact the campaign manager.');
     });
 }
 
@@ -47,6 +60,7 @@ function startFirebase() {
   if (!firebase.apps.length) {
     firebase.initializeApp(FIREBASE_CONFIG);
   }
+  _authReady = true;
 
   var auth = firebase.auth();
   var googleProvider = new firebase.auth.GoogleAuthProvider();
@@ -190,12 +204,13 @@ function friendlyError(code) {
 }
 
 // ── IMMEDIATE STUBS — available before Firebase loads ──────────────────────
-// These get replaced by real implementations when initAuth() runs
+// Show a spinner on the auth screen while config loads
+var _authReady = false;
 window.doGoogleLogin = function() {
-  showInitError('Still loading — try again in a moment.');
+  if (!_authReady) { showInitError('Loading… please wait a moment then try again.'); return; }
 };
 window.doEmailLogin = function() {
-  showInitError('Still loading — try again in a moment.');
+  if (!_authReady) { showInitError('Loading… please wait a moment then try again.'); return; }
 };
 window.toggleAuthPwVisible = function() {
   var inp = document.getElementById('auth-password');
@@ -219,10 +234,6 @@ window.addEventListener('load', function() {
     if (bar) { bar.style.display='block'; bar.textContent='ERROR: Firebase SDK failed to load.\n'; }
     return;
   }
-  if (!window.FIREBASE_CONFIG) {
-    var bar = document.getElementById('debug-bar');
-    if (bar) { bar.style.display='block'; bar.textContent='ERROR: config.js not loaded — check file exists in repo.\n'; }
-    return;
-  }
+
   initAuth();
 });
