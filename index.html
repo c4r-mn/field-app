@@ -9,6 +9,10 @@
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
+<div id="user-bar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99998;background:#1d1b16;color:#fff;font-size:12px;font-family:Outfit,sans-serif;padding:6px 16px;display:none;align-items:center;justify-content:space-between;">
+  <span id="user-bar-name" style="font-weight:600;"></span>
+  <button onclick="doSignOut()" style="background:transparent;border:1px solid #555;color:#ccc;font-family:Outfit,sans-serif;font-size:11px;font-weight:700;padding:4px 12px;border-radius:6px;cursor:pointer;">Sign Out</button>
+</div>
 <div id="debug-bar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;font-size:11px;font-family:monospace;padding:8px 12px;white-space:pre-wrap;max-height:140px;overflow-y:auto;"></div>
 <script>
 window.onerror = function(msg, src, line, col, err) {
@@ -332,15 +336,24 @@ window.addEventListener('unhandledrejection', function(e) {
 
     <span class="field-label">Actions</span>
     <div class="checks">
-      <div class="check-row" id="chk-lit" onclick="this.classList.toggle('checked')"><div class="check-box">✓</div><div class="check-label">📄 Card Left</div></div>
-      <div class="check-row" id="chk-contact" onclick="toggleWantsContact(this)"><div class="check-box">✓</div><div class="check-label">📞 Wants Contact</div></div>
+      <div class="check-row" id="chk-lit" onclick="this.classList.toggle('checked')"><div class="check-box">✓</div><div class="check-label">📄 Literature Left</div></div>
+      <div class="check-row" id="chk-contact" onclick="toggleWantsContact(this)"><div class="check-box">✓</div><div class="check-label">📞 Cassie to Contact</div></div>
+      <div class="check-row" id="chk-sign" onclick="this.classList.toggle('checked')"><div class="check-box">✓</div><div class="check-label">🪧 Wants Yard Sign</div></div>
       <div class="check-row" id="chk-revisit" onclick="this.classList.toggle('checked')"><div class="check-box">✓</div><div class="check-label">🔄 Visit Again</div></div>
     </div>
-    <div id="contact-fields" style="display:none;">
-      <span class="field-label">Name</span>
-      <input class="field-input" id="door-name" type="text" placeholder="First and last name…">
-      <span class="field-label">Phone / Email</span>
-      <input class="field-input" id="door-phone" type="text" placeholder="Phone or email…">
+    <div id="contact-fields" style="display:none;background:var(--light);border-radius:8px;padding:10px 12px;margin-bottom:8px;">
+      <span class="field-label">First Name <span style="color:var(--red);">*</span></span>
+      <input class="field-input" id="door-name" type="text" placeholder="First name (required)…" style="margin-bottom:8px;">
+      <span class="field-label">Last Name (optional)</span>
+      <input class="field-input" id="door-lastname" type="text" placeholder="Last name…" style="margin-bottom:8px;">
+      <span class="field-label">Phone (optional)</span>
+      <input class="field-input" id="door-phone" type="tel" placeholder="Phone number…" style="margin-bottom:8px;">
+      <span class="field-label">Email (optional)</span>
+      <input class="field-input" id="door-email" type="email" placeholder="Email address…" style="margin-bottom:8px;">
+      <div class="check-row" id="chk-stopby" onclick="this.classList.toggle('checked')" style="margin-bottom:0;">
+        <div class="check-box">✓</div>
+        <div class="check-label" style="font-size:12px;">🚶 Cassie to stop by personally</div>
+      </div>
     </div>
     <span class="field-label">Notes</span>
     <textarea class="field-input" id="door-notes" rows="2" placeholder="Anything worth noting…"></textarea>
