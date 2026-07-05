@@ -41,7 +41,8 @@ function initFirebaseAdmin() {
 
 function initFirebaseCanvasser() {
   setFbBase();
-  document.getElementById('setup-screen').style.display='flex';
+  var ss=document.getElementById('setup-screen');
+  if(ss) ss.style.display='flex';
   document.getElementById('setup-loading').style.display='block';
   document.getElementById('setup-fields').style.display='none';
   document.getElementById('setup-btn').disabled = true;
@@ -1252,26 +1253,52 @@ function updateAllLegend(){
 function buildSetupSelects() {
   var vols=activeVols();
   var ns=document.getElementById('setup-name');
-  ns.innerHTML='<option value="">— Select your name —</option>';
-  vols.forEach(function(v){var o=document.createElement('option');o.value=v.id;o.textContent=v.name;ns.appendChild(o);});
-  var hs=document.getElementById('setup-hood');
-  hs.innerHTML='<option value="">— Select neighborhood —</option>';
-  window.NEIGHBORHOODS.forEach(function(n){var o=document.createElement('option');o.value=n.key;o.textContent=n.displayName;hs.appendChild(o);});
+  if(ns){
+    ns.innerHTML='<option value="">— Select your name —</option>';
+    var myEmail=(window.currentUser&&window.currentUser.email)||'';
+    var myId='';
+    Object.entries(roster).forEach(function(e){
+      if(e[1].email&&e[1].email.toLowerCase()===myEmail.toLowerCase()) myId=e[0];
+    });
+    vols.forEach(function(v){
+      var o=document.createElement('option');
+      o.value=v.id; o.textContent=v.name;
+      if(v.id===myId) o.selected=true;
+      ns.appendChild(o);
+    });
+  }
+  var ds=document.getElementById('setup-date');
+  if(ds){
+    ds.innerHTML='<option value="">— Select shift date —</option>';
+    var today=new Date().toISOString().slice(0,10);
+    var days=Object.keys(canvassDays).sort().reverse();
+    if(days.indexOf(today)===-1) days.unshift(today);
+    days.forEach(function(date){
+      var o=document.createElement('option');
+      o.value=date;
+      var day=canvassDays[date];
+      var label=formatDate(date)+(date===today?' (today)':'');
+      if(day&&day.notes) label+=' · '+day.notes;
+      o.textContent=label;
+      if(date===today) o.selected=true;
+      ds.appendChild(o);
+    });
+  }
 }
-
 function onSetupChange() {
-  var name=document.getElementById('setup-name').value;
-  var hood=document.getElementById('setup-hood').value;
-  document.getElementById('setup-btn').disabled=!name||!hood;
-  var note=document.getElementById('hood-note');
-  if(hood){var n=window.NEIGHBORHOODS.find(function(x){return x.key===hood;});if(n&&n.description){note.textContent=n.description;note.style.display='block';}else note.style.display='none';}else note.style.display='none';
-
+  var name=(document.getElementById('setup-name')||{}).value||'';
+  var dateEl=document.getElementById('setup-date');
+  var shiftDate=dateEl?dateEl.value:'';
+  var btn=document.getElementById('setup-btn');
+  if(btn) btn.disabled=!name||!shiftDate;
 }
-
 function startApp() {
-  myVolId=document.getElementById('setup-name').value;
-  neighborhoodKey=document.getElementById('setup-hood').value;
-  if(!myVolId||!neighborhoodKey) return;
+  myVolId=(document.getElementById('setup-name')||{}).value||'';
+  var dateEl=document.getElementById('setup-date');
+  if(dateEl&&dateEl.value) todayKey=dateEl.value;
+  var shiftDay=canvassDays[todayKey];
+  neighborhoodKey=(shiftDay&&shiftDay.neighborhood)||((window.NEIGHBORHOODS&&window.NEIGHBORHOODS[0])?window.NEIGHBORHOODS[0].key:'');
+  if(!myVolId||!todayKey) return;
   myVolName=volName(myVolId);
   // Partner is set by admin during assignment — look it up from Firebase
   partnerVolName='';
