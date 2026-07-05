@@ -9,6 +9,18 @@
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
+<div id="debug-bar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;font-size:11px;font-family:monospace;padding:8px 12px;white-space:pre-wrap;max-height:140px;overflow-y:auto;"></div>
+<script>
+window.onerror = function(msg, src, line, col, err) {
+  var bar = document.getElementById('debug-bar');
+  if (bar) { bar.style.display='block'; bar.textContent += 'ERROR: ' + msg + ' (line ' + line + ')\n'; }
+  return false;
+};
+window.addEventListener('unhandledrejection', function(e) {
+  var bar = document.getElementById('debug-bar');
+  if (bar) { bar.style.display='block'; bar.textContent += 'PROMISE: ' + (e.reason && e.reason.message || e.reason) + '\n'; }
+});
+</script>
 
 <!-- AUTH SCREEN -->
 <div id="auth-screen" style="position:fixed;inset:0;background:var(--cream);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;gap:14px;">
