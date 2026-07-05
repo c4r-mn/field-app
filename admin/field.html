@@ -183,12 +183,42 @@ var RESULT_COLORS = {
   'No Soliciting':'#92400e','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb'
 };
 
+
+function safeInitMap(containerId, callback) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  // If already has dimensions, init immediately
+  if (el.offsetWidth > 0 && el.offsetHeight > 0) {
+    callback();
+    return;
+  }
+  // Otherwise wait for it to become visible
+  if (window.ResizeObserver) {
+    var ro = new ResizeObserver(function(entries) {
+      if (el.offsetWidth > 0 && el.offsetHeight > 0) {
+        ro.disconnect();
+        callback();
+      }
+    });
+    ro.observe(el);
+  } else {
+    // Fallback: poll
+    var tries = 0;
+    var interval = setInterval(function() {
+      if (el.offsetWidth > 0 && el.offsetHeight > 0 || tries++ > 20) {
+        clearInterval(interval);
+        if (el.offsetWidth > 0) callback();
+      }
+    }, 100);
+  }
+}
+
 function initFieldMap() {
-  fieldMap = L.map('field-map').setView([45.017,-93.153],14);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-    attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
-  }).addTo(fieldMap);
-  setTimeout(function(){ fieldMap.invalidateSize(); }, 200);
+  safeInitMap('field-map', function() {
+    fieldMap = L.map('field-map').setView([45.017,-93.153],14);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+      attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
+    }).addTo(fieldMap);
 
   // Fit to addresses
   var allAddrs = [];
@@ -306,6 +336,7 @@ function csvCell(v) { return '"'+(v||'').toString().replace(/"/g,'""')+'"'; }
 
 var _tt;
 function showToast(msg){var t=document.getElementById('toast');t.textContent=msg;t.style.opacity='1';clearTimeout(_tt);_tt=setTimeout(function(){t.style.opacity='0';},2500);}
+});
 </script>
 </body>
-</html>
+</html>  }); // end
