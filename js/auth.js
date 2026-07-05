@@ -1,3 +1,23 @@
+// Firebase config — safe to be public (security enforced by Firebase rules)
+// Admin emails determine who gets admin UI vs canvasser UI
+var FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAug-z3reeIeiOsMqRWo5SH5l-w7xCz9bA",
+  authDomain: "canvas-c4r.firebaseapp.com",
+  databaseURL: "https://canvas-c4r-default-rtdb.firebaseio.com",
+  projectId: "canvas-c4r",
+  storageBucket: "canvas-c4r.firebasestorage.app",
+  messagingSenderId: "832444035787",
+  appId: "1:832444035787:web:f9aa34afea27015dd0614e",
+};
+
+var ADMIN_EMAILS = [
+  'campaign@cassie4roseville.com',
+];
+
+// Make available globally for app.js
+window.FIREBASE_CONFIG = FIREBASE_CONFIG;
+window.ADMIN_EMAILS = ADMIN_EMAILS;
+
 // Cassie for Roseville — Field App
 // Authentication — Firebase Auth (compat SDK, regular script)
 
@@ -134,6 +154,29 @@ function friendlyError(code) {
     case 'auth/popup-blocked':          return 'Popup blocked — allow popups for this site.';
     default: return 'Sign-in failed — try again.';
   }
+}
+
+// ── IMMEDIATE STUBS — available before Firebase loads ──────────────────────
+// These get replaced by real implementations when initAuth() runs
+window.doGoogleLogin = function() {
+  showInitError('Still loading — try again in a moment.');
+};
+window.doEmailLogin = function() {
+  showInitError('Still loading — try again in a moment.');
+};
+window.toggleAuthPwVisible = function() {
+  var inp = document.getElementById('auth-password');
+  var btn = document.getElementById('pw-toggle');
+  if (!inp) return;
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  if (btn) btn.textContent = inp.type === 'password' ? 'Show' : 'Hide';
+};
+window.doSignOut = function() { location.reload(); };
+window.goLogin = function() { location.reload(); };
+
+function showInitError(msg) {
+  var el = document.getElementById('auth-error');
+  if (el) el.textContent = msg;
 }
 
 // Wait for all scripts to load then init
