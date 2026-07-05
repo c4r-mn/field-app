@@ -7,6 +7,34 @@
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../css/app.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <style>
+    /* Shift-specific styles */
+    .canvasser-tab{padding:8px 16px;font-size:13px;font-weight:700;border:2px solid var(--border);
+      border-radius:8px;cursor:pointer;background:var(--white);color:var(--muted);transition:all .15s;}
+    .canvasser-tab.active{background:var(--gold);color:var(--black);border-color:var(--gold);}
+    .result-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:10px;
+      font-size:11px;font-weight:700;background:var(--light);color:var(--muted);}
+    .result-badge.accepted{background:#d4edda;color:#155724;}
+    .result-badge.refused{background:#f8d7da;color:#721c24;}
+    .result-badge.nothome{background:#e2e3e5;color:#383d41;}
+    .danger-zone{border:2px solid #fee2e2;border-radius:12px;padding:16px;margin-top:24px;}
+    .danger-zone-title{font-size:12px;font-weight:800;color:var(--red);text-transform:uppercase;
+      letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;justify-content:space-between;}
+    .danger-zone-body{display:none;margin-top:14px;}
+    .danger-zone-body.open{display:block;}
+    .addr-log-row{display:flex;align-items:flex-start;gap:10px;padding:8px 0;
+      border-bottom:1px solid var(--border);font-size:12px;}
+    .addr-log-num{font-weight:800;color:var(--gold-acc);min-width:24px;flex-shrink:0;}
+    .addr-log-addr{font-weight:700;flex:1;min-width:0;}
+    .addr-log-result{flex-shrink:0;}
+    .addr-log-note{color:var(--muted);font-size:11px;margin-top:2px;}
+    .not-knocked{color:var(--subtle);font-style:italic;}
+    .ck-route-row{display:flex;align-items:center;gap:8px;padding:8px 10px;
+      border-bottom:1px solid #f0ede4;min-height:40px;border-left:3px solid var(--gold);background:#fff;}
+    .ck-unsel-row{display:flex;align-items:center;gap:8px;padding:8px 10px;
+      border-bottom:1px solid #f0ede4;min-height:40px;cursor:pointer;}
+    .ck-unsel-row:hover{background:var(--light);}
+  </style>
 </head>
 <body>
 
@@ -42,61 +70,108 @@
   </div>
   <main class="admin-content">
 
-    <div class="admin-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+    <!-- Header -->
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
       <div>
-        <div class="admin-page-title" id="shift-title">Loading shift...</div>
+        <div class="admin-page-title" id="shift-title">Loading...</div>
         <div class="admin-page-sub" id="shift-sub"></div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn-gold" onclick="saveShiftEdits()">Save Changes</button>
-        <button class="btn btn-ghost" id="print-btn" onclick="printWalkSheetFromShift()" style="display:none;">Print Walk Sheet</button>
-      </div>
+      <button class="btn btn-ghost btn-sm" id="print-btn" onclick="printWalkSheet()" style="display:none;">🖨 Print Walk Sheet</button>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;margin-top:20px;">
-      <div class="page-card">
-        <div class="page-card-title">Shift Details</div>
-        <div class="form-group">
-          <label class="form-label">Notes</label>
-          <input class="form-input" id="edit-notes" type="text" placeholder="Shift notes...">
+    <!-- Canvasser tabs -->
+    <div id="canvasser-tabs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;"></div>
+
+    <!-- Canvasser view -->
+    <div id="canvasser-view" style="display:none;">
+
+      <!-- Stats row -->
+      <div id="cv-stats" class="stat-row" style="margin-bottom:16px;"></div>
+
+      <!-- Notes -->
+      <div class="page-card" style="margin-bottom:16px;">
+        <div class="page-card-title">
+          Shift Notes
+          <button class="btn btn-ghost btn-sm" onclick="saveNotes()">Save Notes</button>
         </div>
-        <div class="form-group">
-          <label class="form-label">Volunteers</label>
-          <div id="edit-vol-grid" class="vol-check-grid"></div>
+        <textarea id="cv-notes" class="form-input" rows="2" placeholder="Notes for this canvasser's shift..." style="resize:vertical;"></textarea>
+      </div>
+
+      <!-- Map + address list side by side -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+        <div class="page-card" style="padding:12px;">
+          <div class="page-card-title" style="margin-bottom:8px;">Route Map</div>
+          <div id="shift-map" style="height:400px;border-radius:8px;border:1px solid var(--border);"></div>
+        </div>
+        <div class="page-card" style="padding:12px;overflow:hidden;">
+          <div class="page-card-title" style="margin-bottom:8px;" id="addr-list-title">Addresses</div>
+          <div id="addr-list" style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;"></div>
         </div>
       </div>
-      <div class="page-card">
-        <div class="page-card-title">Assign Houses</div>
-        <div class="form-group">
-          <label class="form-label">Canvasser</label>
-          <select class="form-input" id="assign-canvasser" onchange="loadCanvasserAssignment()">
-            <option value="">— Select canvasser —</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Partner (optional — gets same houses)</label>
-          <select class="form-input" id="assign-partner">
-            <option value="">— No partner —</option>
-          </select>
-        </div>
-        <div id="assign-status" style="font-size:12px;color:var(--muted);margin-bottom:8px;"></div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-gold" onclick="saveAssignments()">Save Assignments</button>
-          <button class="btn btn-ghost btn-sm" id="print-assign-btn" onclick="printWalkSheetFromShift()" style="display:none;">Print</button>
-        </div>
+
+    </div>
+
+    <!-- Empty state -->
+    <div id="no-canvasser" class="page-card" style="text-align:center;padding:32px;color:var(--muted);">
+      <div style="font-size:32px;margin-bottom:12px;">📋</div>
+      <div style="font-size:14px;font-weight:700;">Select a canvasser above to view their route and results</div>
+    </div>
+
+    <!-- Danger Zone -->
+    <div class="danger-zone">
+      <div class="danger-zone-title" onclick="toggleDanger()">
+        <span>⚠️ Edit Shift (Danger Zone)</span>
+        <span id="danger-arrow">▼</span>
       </div>
-    </div>
+      <div class="danger-zone-body" id="danger-body">
+        <div style="font-size:12px;color:var(--red);margin-bottom:14px;">
+          Only make changes here if absolutely necessary. Reassigning houses or removing volunteers may affect existing data.
+        </div>
 
-    <div class="page-card" id="assign-card" style="display:none;">
-      <div class="page-card-title" id="assign-card-title">Select Houses</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Click pins or list items to add. Drag route items to reorder.</div>
-      <div id="shift-map" style="height:380px;border-radius:8px;border:1px solid var(--border);margin-bottom:12px;"></div>
-      <div id="assign-checklist" style="border:1px solid var(--border);border-radius:8px;max-height:320px;overflow-y:auto;"></div>
-    </div>
+        <!-- Edit notes/volunteers -->
+        <div class="page-card" style="margin-bottom:12px;">
+          <div class="page-card-title">Shift Details</div>
+          <div class="form-group">
+            <label class="form-label">Shift Notes</label>
+            <input class="form-input" id="edit-notes" type="text" placeholder="Shift notes...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Volunteers</label>
+            <div id="edit-vol-grid" class="vol-check-grid"></div>
+          </div>
+          <button class="btn btn-gold btn-sm" onclick="saveShiftEdits()">Save Shift Details</button>
+        </div>
 
-    <div class="page-card">
-      <div class="page-card-title">Results by Canvasser</div>
-      <div id="shift-results"><div style="color:var(--subtle);font-size:13px;">Loading results...</div></div>
+        <!-- Reassign houses -->
+        <div class="page-card" style="margin-bottom:12px;">
+          <div class="page-card-title">Reassign Houses</div>
+          <div class="form-row" style="margin-bottom:10px;">
+            <div class="form-col">
+              <label class="form-label">Canvasser</label>
+              <select class="form-input" id="assign-canvasser" onchange="loadAssignMode()">
+                <option value="">— Select —</option>
+              </select>
+            </div>
+            <div class="form-col">
+              <label class="form-label">Partner (gets same houses)</label>
+              <select class="form-input" id="assign-partner">
+                <option value="">— No partner —</option>
+              </select>
+            </div>
+          </div>
+          <div id="assign-status" style="font-size:12px;color:var(--muted);margin-bottom:8px;"></div>
+          <div id="assign-checklist-wrap" style="display:none;">
+            <div id="assign-checklist" style="border:1px solid var(--border);border-radius:8px;max-height:280px;overflow-y:auto;margin-bottom:10px;"></div>
+            <button class="btn btn-gold btn-sm" onclick="saveAssignments()">Save Assignments</button>
+          </div>
+        </div>
+
+        <!-- Delete shift -->
+        <div style="padding-top:8px;">
+          <button class="btn btn-danger btn-sm" onclick="deleteShift()">Delete This Shift</button>
+        </div>
+
+      </div>
     </div>
 
   </main>
@@ -112,188 +187,280 @@
 <script src="/field-app/js/data.js"></script>
 <script>
 var shiftDate = new URLSearchParams(window.location.search).get('date') || '';
-var roster = {};
-var shiftData = null;
-var shiftMap = null;
-var adminAddresses = [];
-var adminSelected = {};
-var adminRoute = [];
-var adminMarkers = {};
+var roster = {}, shiftData = null, allAssignments = {}, allLogs = {};
+var shiftMap = null, mapMarkers = {};
 var currentCanvasserId = '';
-var allAssignments = {};
+var adminAddresses = [], adminSelected = {}, adminRoute = [], adminMarkers = {};
+var assignMode = false;
 var _dragId = null;
 
 var PROP_META = {
-  house:     {label:'House',           color:'#27ae60'},
-  apartment: {label:'Apartment',       color:'#2563eb'},
-  senior:    {label:'55+ Community',   color:'#d97706'},
-  mobile:    {label:'Mobile Home Park',color:'#7c3aed'},
-  assisted:  {label:'Assisted Living', color:'#e67e22'},
+  house:    {label:'House',           color:'#27ae60'},
+  apartment:{label:'Apartment',       color:'#2563eb'},
+  senior:   {label:'55+ Community',   color:'#d97706'},
+  mobile:   {label:'Mobile Home Park',color:'#7c3aed'},
+  assisted: {label:'Assisted Living', color:'#e67e22'},
+};
+var RESULT_COLORS = {
+  'Not Home':'#64748b','Vacant':'#94a3b8','For Sale':'#7c3aed',
+  'No Soliciting':'#92400e','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb'
 };
 
 initAuth(
-  function(user) { if (shiftDate) loadShift(); else window.location.href='/field-app/admin/shifts.html'; },
-  function(user) { window.location.href='/field-app/canvass.html'; }
+  function(user){ if(shiftDate) loadShift(); else window.location.href='/field-app/admin/shifts.html'; },
+  function(user){ window.location.href='/field-app/canvass.html'; }
 );
 
 function loadShift() {
   setFbBase();
-  Promise.all([fbGet('/roster'), fbGet('/canvass-days/'+shiftDate)]).then(function(r) {
+  Promise.all([
+    fbGet('/roster'),
+    fbGet('/canvass-days/'+shiftDate),
+  ]).then(function(r) {
     roster = r[0] || {};
     shiftData = r[1];
     if (!shiftData) { document.getElementById('shift-title').textContent='Shift not found'; return; }
-    renderShiftHeader();
-    renderEditForm();
-    buildAssignSelects();
-    loadAllAssignments();
-    loadResults();
+
+    var hood = (window.NEIGHBORHOODS||[]).find(function(n){return n.key===shiftData.neighborhood;});
+    var hoodName = hood ? hood.displayName : (shiftData.neighborhood||'');
+    document.getElementById('shift-title').textContent = formatDate(shiftDate)+' — '+hoodName;
+    var isPast = shiftDate < new Date().toISOString().slice(0,10);
+    document.getElementById('shift-sub').textContent = isPast ? 'Past shift' : 'Upcoming shift';
+
+    adminAddresses = (window.NEIGHBORHOOD_DATA&&window.NEIGHBORHOOD_DATA[shiftData.neighborhood])||[];
+
+    // Load assignments and logs
+    Promise.all([
+      fbGet('/'+shiftData.neighborhood+'/assignments/'+shiftDate),
+      fbGet('/'+shiftData.neighborhood+'/logs/'+shiftDate),
+    ]).then(function(r2) {
+      allAssignments = r2[0] || {};
+      allLogs = r2[1] || {};
+      buildCanvasserTabs();
+      buildDangerZone();
+    });
   });
 }
 
-function volName(id) { return roster[id] ? roster[id].name : id; }
+function volName(id){ return roster[id]?roster[id].name:id; }
 
-function activeVols() {
+function activeVols(){
   return Object.entries(roster)
-    .filter(function(e){ return e[1].status==='active'; })
-    .sort(function(a,b){ return a[1].name.localeCompare(b[1].name); })
-    .map(function(e){ return {id:e[0], name:e[1].name}; });
+    .filter(function(e){return e[1].status==='active';})
+    .sort(function(a,b){return a[1].name.localeCompare(b[1].name);})
+    .map(function(e){return {id:e[0],name:e[1].name};});
 }
 
-function renderShiftHeader() {
-  var hood = (window.NEIGHBORHOODS||[]).find(function(n){ return n.key===shiftData.neighborhood; });
-  var hoodName = hood ? hood.displayName : (shiftData.neighborhood||'');
-  document.getElementById('shift-title').textContent = formatDate(shiftDate) + ' — ' + hoodName;
-  var isPast = shiftDate < new Date().toISOString().slice(0,10);
-  document.getElementById('shift-sub').textContent = isPast ? 'Past shift' : 'Upcoming shift';
-  adminAddresses = (window.NEIGHBORHOOD_DATA && window.NEIGHBORHOOD_DATA[shiftData.neighborhood]) || [];
-  document.getElementById('print-btn').style.display = 'inline-flex';
+function buildCanvasserTabs() {
+  var tabs = document.getElementById('canvasser-tabs');
+  var vols = shiftData.volunteers || [];
+  if (!vols.length) { tabs.innerHTML='<div style="color:var(--subtle);font-size:13px;">No volunteers assigned to this shift.</div>'; return; }
+
+  document.getElementById('print-btn').style.display='inline-flex';
+
+  tabs.innerHTML = vols.map(function(id){
+    return '<button class="canvasser-tab" data-id="'+id+'" onclick="selectCanvasser(this.dataset.id)">'+volName(id)+'</button>';
+  }).join('');
+
+  // Auto-select first
+  selectCanvasser(vols[0]);
 }
 
-function renderEditForm() {
+function selectCanvasser(id) {
+  currentCanvasserId = id;
+  document.querySelectorAll('.canvasser-tab').forEach(function(t){
+    t.classList.toggle('active', t.dataset.id===id);
+  });
+  document.getElementById('canvasser-view').style.display='block';
+  document.getElementById('no-canvasser').style.display='none';
+  renderCanvasserView(id);
+}
+
+function renderCanvasserView(id) {
+  var assignment = allAssignments[id];
+  var route = assignment && Array.isArray(assignment.route) ? assignment.route : [];
+  var addrMap = {};
+  adminAddresses.forEach(function(a){addrMap[a.id]=a;});
+  var volLogs = allLogs[id] || {};
+
+  // Stats
+  var logs = Object.values(volLogs);
+  var accepted = logs.filter(function(l){return l.contact==='Accepted';}).length;
+  var contact = logs.filter(function(l){return l.wantContact;}).length;
+  var signs = logs.filter(function(l){return l.wantSign;}).length;
+  var nosolic = logs.filter(function(l){return l.contact==='No Soliciting';}).length;
+  document.getElementById('cv-stats').innerHTML =
+    statCard(logs.length, 'Doors Knocked')+
+    statCard(route.length, 'Assigned')+
+    statCard(accepted, 'Accepted', '#27ae60')+
+    statCard(contact, 'Cassie to Contact', '#D4A832')+
+    statCard(signs, 'Yard Signs', '#D4A832')+
+    statCard(nosolic, 'No Soliciting', '#c0392b');
+
+  // Notes
+  document.getElementById('cv-notes').value = shiftData['notes_'+id] || shiftData.notes || '';
+
+  // Address list
+  document.getElementById('addr-list-title').textContent = route.length+' Addresses — '+volName(id);
+  var listEl = document.getElementById('addr-list');
+  if (!route.length) {
+    listEl.innerHTML='<div style="padding:16px;color:var(--subtle);font-size:13px;">No addresses assigned.</div>';
+  } else {
+    listEl.innerHTML = route.map(function(addrId, i) {
+      var addr = addrMap[addrId];
+      if (!addr) return '';
+      var log = volLogs[addrId];
+      var resultColor = log ? (RESULT_COLORS[log.contact]||'#888') : null;
+      return '<div class="addr-log-row">'
+        + '<div class="addr-log-num">'+(i+1)+'.</div>'
+        + '<div style="flex:1;min-width:0;">'
+          + '<div class="addr-log-addr">'+addr.n+' '+addr.s+(addr.u?' &middot; '+addr.u:'')+'</div>'
+          + (log
+            ? '<div style="margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">'
+                + '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;background:'+resultColor+'22;color:'+resultColor+';">'+log.contact+'</span>'
+                + (log.wantContact?'<span style="font-size:10px;font-weight:700;color:var(--gold-acc);">📞 '+( log.name||'Contact')+'</span>':'')
+                + (log.wantSign?'<span style="font-size:10px;font-weight:700;color:var(--gold-acc);">🪧 Sign</span>':'')
+                + (log.stopBy?'<span style="font-size:10px;font-weight:700;color:var(--gold-acc);">🚶 Stop by</span>':'')
+                + (log.notes?'<div class="addr-log-note">'+log.notes+'</div>':'')
+              + '</div>'
+            : '<div class="not-knocked">Not knocked</div>')
+        + '</div>'
+      + '</div>';
+    }).join('');
+  }
+
+  // Map
+  renderShiftMap(route, addrMap, volLogs);
+}
+
+function statCard(n, label, color) {
+  return '<div class="stat-card"><div class="stat-n"'+(color?' style="color:'+color+';"':'')+'>'+n+'</div><div class="stat-l">'+label+'</div></div>';
+}
+
+function saveNotes() {
+  if (!shiftData) return;
+  var notes = document.getElementById('cv-notes').value.trim();
+  shiftData['notes_'+currentCanvasserId] = notes;
+  var notesKey = 'notes_'+currentCanvasserId;
+  var notesObj = {};
+  notesObj[notesKey] = notes;
+  fbPatch('/canvass-days/'+shiftDate, notesObj).then(function(){
+    showToast('Notes saved');
+  }).catch(function(){ showToast('Save failed'); });
+}
+
+// ── MAP ──────────────────────────────────────────────────────────────────────
+function renderShiftMap(route, addrMap, volLogs) {
+  if (!shiftMap) {
+    shiftMap = L.map('shift-map').setView([45.017,-93.153], 15);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+      attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
+    }).addTo(shiftMap);
+  }
+  Object.values(mapMarkers).forEach(function(m){shiftMap.removeLayer(m);});
+  mapMarkers = {};
+
+  var bounds = [];
+  route.forEach(function(addrId, i) {
+    var addr = addrMap[addrId]; if(!addr) return;
+    var log = volLogs[addrId];
+    var color = log ? (RESULT_COLORS[log.contact]||'#888') : '#D4A832';
+    var label = '<span style="font-size:8px;font-weight:800;color:'+(log?'#fff':'#1d1b16')+';">'+(i+1)+'</span>';
+    var icon = L.divIcon({
+      className:'',
+      html:'<div style="width:20px;height:20px;background:'+color+';border-radius:50%;border:2px solid rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.3);">'+label+'</div>',
+      iconSize:[20,20],iconAnchor:[10,10]
+    });
+    var popup = '<strong>'+(i+1)+'. '+addr.n+' '+addr.s+'</strong>'+(addr.u?' &middot; '+addr.u:'');
+    if (log) {
+      popup += '<br><span style="color:'+color+';font-weight:700;">'+log.contact+'</span>';
+      if (log.name) popup += '<br>'+log.name+(log.phone?' &middot; '+log.phone:'');
+      if (log.notes) popup += '<br><em>'+log.notes+'</em>';
+    }
+    var m = L.marker([addr.lat,addr.lng],{icon:icon}).bindPopup(popup).addTo(shiftMap);
+    mapMarkers[addrId]=m;
+    bounds.push([addr.lat,addr.lng]);
+  });
+
+  if (bounds.length) shiftMap.fitBounds(bounds,{padding:[20,20]});
+  shiftMap.invalidateSize();
+}
+
+// ── DANGER ZONE ──────────────────────────────────────────────────────────────
+function toggleDanger() {
+  var body = document.getElementById('danger-body');
+  var arrow = document.getElementById('danger-arrow');
+  var open = body.classList.toggle('open');
+  arrow.textContent = open ? '▲' : '▼';
+  if (open && !document.getElementById('edit-vol-grid').innerHTML) {
+    buildDangerZone();
+  }
+}
+
+function buildDangerZone() {
+  // Edit form
   document.getElementById('edit-notes').value = shiftData.notes || '';
   var grid = document.getElementById('edit-vol-grid');
-  var vols = activeVols();
-  grid.innerHTML = vols.map(function(v) {
-    var checked = (shiftData.volunteers||[]).indexOf(v.id) !== -1;
-    return '<div class="vol-check-item'+(checked?' checked':'')+'" data-id="'+v.id+'" onclick="this.classList.toggle(\'checked\')">' +
-      '<div class="vci-box">&#x2713;</div><div class="vci-name">'+v.name+'</div></div>';
+  grid.innerHTML = activeVols().map(function(v){
+    var checked = (shiftData.volunteers||[]).indexOf(v.id)!==-1;
+    return '<div class="vol-check-item'+(checked?' checked':'')+'" data-id="'+v.id+'" onclick="this.classList.toggle(\'checked\')">'
+      +'<div class="vci-box">&#x2713;</div><div class="vci-name">'+v.name+'</div></div>';
   }).join('');
-}
 
-function buildAssignSelects() {
-  var vols = (shiftData.volunteers||[]).map(function(id){ return {id:id,name:volName(id)}; });
-  if (!vols.length) vols = activeVols();
+  // Assign selects
+  var vols = (shiftData.volunteers||[]).length ? (shiftData.volunteers||[]).map(function(id){return {id:id,name:volName(id)};}) : activeVols();
   var cvSel = document.getElementById('assign-canvasser');
   var ptSel = document.getElementById('assign-partner');
-  vols.forEach(function(v) {
-    var o = document.createElement('option'); o.value=v.id; o.textContent=v.name; cvSel.appendChild(o);
-    var o2 = document.createElement('option'); o2.value=v.id; o2.textContent=v.name; ptSel.appendChild(o2);
+  cvSel.innerHTML = '<option value="">— Select —</option>';
+  ptSel.innerHTML = '<option value="">— No partner —</option>';
+  vols.forEach(function(v){
+    cvSel.innerHTML += '<option value="'+v.id+'">'+v.name+'</option>';
+    ptSel.innerHTML += '<option value="'+v.id+'">'+v.name+'</option>';
   });
 }
 
-function loadAllAssignments() {
-  fbGet('/'+shiftData.neighborhood+'/assignments/'+shiftDate).then(function(d) {
-    allAssignments = (d && typeof d==='object') ? d : {};
-    initShiftMap();
-  });
+function saveShiftEdits() {
+  var notes = document.getElementById('edit-notes').value.trim();
+  var vols = Array.from(document.querySelectorAll('#edit-vol-grid .vol-check-item.checked')).map(function(el){return el.dataset.id;});
+  shiftData.notes = notes;
+  shiftData.volunteers = vols;
+  fbPut('/canvass-days/'+shiftDate, shiftData).then(function(){
+    buildCanvasserTabs();
+    showToast('Shift details saved');
+  }).catch(function(){showToast('Save failed');});
 }
 
-function loadCanvasserAssignment() {
-  currentCanvasserId = document.getElementById('assign-canvasser').value;
+function loadAssignMode() {
+  var cvId = document.getElementById('assign-canvasser').value;
+  var wrap = document.getElementById('assign-checklist-wrap');
+  wrap.style.display = cvId ? 'block' : 'none';
+  if (!cvId) return;
+
   adminSelected = {};
   adminRoute = [];
-  document.getElementById('assign-card').style.display = currentCanvasserId ? 'block' : 'none';
-  document.getElementById('print-assign-btn').style.display = currentCanvasserId ? 'inline-flex' : 'none';
-  if (!currentCanvasserId) return;
-
-  var saved = allAssignments[currentCanvasserId];
-  if (saved) {
-    if (Array.isArray(saved.route)) {
-      adminRoute = saved.route.slice();
-      adminSelected = Object.assign({}, saved.assignments || {});
-    } else {
-      Object.keys(saved).forEach(function(k){
-        if(k!=='route'&&k!=='assignments'){ adminSelected[k]=true; adminRoute.push(k); }
-      });
-    }
+  var saved = allAssignments[cvId];
+  if (saved && Array.isArray(saved.route)) {
+    adminRoute = saved.route.slice();
+    adminSelected = Object.assign({}, saved.assignments||{});
   }
-
-  document.getElementById('assign-card-title').textContent = 'Houses for ' + volName(currentCanvasserId);
-  document.getElementById('assign-status').textContent = adminRoute.length + ' addresses in route';
-  if (shiftMap) shiftMap.invalidateSize();
-  refreshMapMarkers();
-  renderChecklist();
+  document.getElementById('assign-status').textContent = adminRoute.length+' addresses in route';
+  renderAssignChecklist();
 }
 
-function initShiftMap() {
-  if (shiftMap) return;
-  shiftMap = L.map('shift-map').setView([45.017,-93.153], 15);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 20
-  }).addTo(shiftMap);
-  if (adminAddresses.length) {
-    var lats = adminAddresses.map(function(a){ return a.lat; });
-    var lngs = adminAddresses.map(function(a){ return a.lng; });
-    shiftMap.fitBounds([
-      [Math.min.apply(null,lats), Math.min.apply(null,lngs)],
-      [Math.max.apply(null,lats), Math.max.apply(null,lngs)]
-    ], {padding:[20,20]});
-  }
-  refreshMapMarkers();
-}
-
-function getSiblingUnits(id) {
-  var addr = adminAddresses.find(function(a){ return a.id===id; });
-  if (!addr || !addr.u) return [id];
-  return adminAddresses
-    .filter(function(a){ return a.n===addr.n && a.s===addr.s; })
-    .map(function(a){ return a.id; })
-    .sort(function(a,b){
-      var au = adminAddresses.find(function(x){ return x.id===a; });
-      var bu = adminAddresses.find(function(x){ return x.id===b; });
-      return (parseInt((au&&au.u||'').replace(/\D/g,''))||0) - (parseInt((bu&&bu.u||'').replace(/\D/g,''))||0);
-    });
-}
-
-function toggleAddr(id) {
-  if (!currentCanvasserId) { showToast('Select a canvasser first'); return; }
-  var siblings = getSiblingUnits(id);
+// Global checklist handlers
+function _ckToggle(el){
+  var id = el.dataset.aid;
+  if (!id) return;
   if (adminSelected[id]) {
-    siblings.forEach(function(sid){ delete adminSelected[sid]; adminRoute = adminRoute.filter(function(r){ return r!==sid; }); });
+    delete adminSelected[id];
+    adminRoute = adminRoute.filter(function(r){return r!==id;});
   } else {
-    siblings.forEach(function(sid){ if(!adminSelected[sid]){ adminSelected[sid]=true; adminRoute.push(sid); } });
+    adminSelected[id] = true;
+    adminRoute.push(id);
   }
-  document.getElementById('assign-status').textContent = adminRoute.length + ' addresses in route';
-  refreshMapMarkers();
-  renderChecklist();
+  document.getElementById('assign-status').textContent = adminRoute.length+' addresses in route';
+  renderAssignChecklist();
 }
-
-function refreshMapMarkers() {
-  if (!shiftMap) return;
-  Object.values(adminMarkers).forEach(function(m){ shiftMap.removeLayer(m); });
-  adminMarkers = {};
-  adminAddresses.forEach(function(addr) {
-    var sel = !!adminSelected[addr.id];
-    var routeIdx = adminRoute.indexOf(addr.id);
-    var meta = PROP_META[addr.t] || PROP_META.house;
-    var color = sel ? '#D4A832' : meta.color;
-    var size = sel ? 20 : 9;
-    var opacity = sel ? 1 : 0.35;
-    var label = sel && routeIdx >= 0 ? '<span style="font-size:8px;font-weight:800;color:#1d1b16;">'+(routeIdx+1)+'</span>' : '';
-    var icon = L.divIcon({
-      className: '',
-      html: '<div style="width:'+size+'px;height:'+size+'px;background:'+color+';border:'+(sel?'2px solid rgba(0,0,0,.3)':'1.5px solid rgba(0,0,0,.1)')+';border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.2);cursor:pointer;opacity:'+opacity+';display:flex;align-items:center;justify-content:center;">'+label+'</div>',
-      iconSize: [size,size], iconAnchor: [size/2,size/2]
-    });
-    var m = L.marker([addr.lat,addr.lng], {icon:icon}).addTo(shiftMap);
-    m.on('click', function(e){ L.DomEvent.stopPropagation(e); toggleAddr(addr.id); });
-    m.bindTooltip(addr.n+' '+addr.s);
-    adminMarkers[addr.id] = m;
-  });
-}
-
-// Global drag handlers — avoids inline onclick quote nesting
-function _ckToggle(el){ toggleAddr(el.dataset.aid); }
 function _ckDragStart(el){ _dragId=el.dataset.rid; el.style.opacity='0.5'; }
 function _ckDragOver(el){ el.style.background='#fdf6e0'; }
 function _ckDragLeave(el){ el.style.background='#fff'; }
@@ -302,166 +469,127 @@ function _ckDrop(el){
   el.style.background='#fff';
   var tid=el.dataset.rid;
   if(!_dragId||_dragId===tid) return;
-  var fi=adminRoute.indexOf(_dragId), ti=adminRoute.indexOf(tid);
+  var fi=adminRoute.indexOf(_dragId),ti=adminRoute.indexOf(tid);
   if(fi===-1||ti===-1) return;
   adminRoute.splice(fi,1); adminRoute.splice(ti,0,_dragId);
   document.getElementById('assign-status').textContent=adminRoute.length+' addresses in route';
-  refreshMapMarkers(); renderChecklist();
+  renderAssignChecklist();
 }
 
-function renderChecklist() {
+function renderAssignChecklist() {
   var container = document.getElementById('assign-checklist');
   var addrMap = {};
-  adminAddresses.forEach(function(a){ addrMap[a.id]=a; });
+  adminAddresses.forEach(function(a){addrMap[a.id]=a;});
 
-  var routeHtml = adminRoute.map(function(id, i) {
-    var addr = addrMap[id]; if(!addr) return '';
-    var meta = PROP_META[addr.t]||PROP_META.house;
+  var routeHtml = adminRoute.map(function(id,i){
+    var addr=addrMap[id]; if(!addr) return '';
+    var meta=PROP_META[addr.t]||PROP_META.house;
     return '<div class="ck-route-row" draggable="true" data-rid="'+id+'"'
-      + ' ondragstart="_ckDragStart(this)" ondragover="event.preventDefault();_ckDragOver(this)"'
-      + ' ondragleave="_ckDragLeave(this)" ondrop="_ckDrop(this)" ondragend="_ckDragEnd(this)"'
-      + ' style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #f0ede4;min-height:44px;border-left:3px solid var(--gold);background:#fff;">'
-      + '<div style="color:#ccc;font-size:14px;cursor:grab;flex-shrink:0;user-select:none;">::</div>'
-      + '<div style="width:10px;height:10px;border-radius:50%;background:var(--gold);flex-shrink:0;cursor:pointer;" data-aid="'+id+'" onclick="_ckToggle(this)"></div>'
-      + '<div style="flex:1;min-width:0;">'
-        + '<div style="font-size:12px;font-weight:700;"><span style="color:var(--gold-acc);margin-right:4px;">'+(i+1)+'.</span>'+addr.n+' '+addr.s+(addr.u?' &middot; '+addr.u:'')+'</div>'
-        + '<div style="font-size:10px;color:var(--subtle);">'+meta.label+'</div>'
-      + '</div>'
-      + '<button data-aid="'+id+'" onclick="_ckToggle(this)" style="border:none;background:none;cursor:pointer;color:var(--red);font-size:16px;padding:4px;flex-shrink:0;">&times;</button>'
-      + '</div>';
+      +' ondragstart="_ckDragStart(this)" ondragover="event.preventDefault();_ckDragOver(this)"'
+      +' ondragleave="_ckDragLeave(this)" ondrop="_ckDrop(this)" ondragend="_ckDragEnd(this)">'
+      +'<div style="color:#ccc;font-size:12px;cursor:grab;flex-shrink:0;user-select:none;">::</div>'
+      +'<div style="width:8px;height:8px;border-radius:50%;background:var(--gold);flex-shrink:0;"></div>'
+      +'<div style="flex:1;min-width:0;font-size:12px;font-weight:700;"><span style="color:var(--gold-acc);margin-right:4px;">'+(i+1)+'.</span>'+addr.n+' '+addr.s+(addr.u?' &middot; '+addr.u:'')+'<div style="font-size:10px;color:var(--subtle);font-weight:400;">'+meta.label+'</div></div>'
+      +'<button data-aid="'+id+'" onclick="_ckToggle(this)" style="border:none;background:none;cursor:pointer;color:var(--red);font-size:14px;padding:4px;flex-shrink:0;">&times;</button>'
+      +'</div>';
   }).join('');
 
-  var divider = adminRoute.length
-    ? '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--subtle);padding:6px 10px;background:var(--light);">Not yet added</div>'
-    : '';
+  var divider = adminRoute.length ? '<div style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--subtle);padding:5px 10px;background:var(--light);">Not yet added</div>' : '';
 
-  var unsel = adminAddresses.filter(function(a){ return !adminSelected[a.id]; })
-    .sort(function(a,b){ return parseInt(a.n||0)-parseInt(b.n||0); });
-
-  var unselHtml = unsel.map(function(addr) {
-    var meta = PROP_META[addr.t]||PROP_META.house;
-    return '<div data-aid="'+addr.id+'" onclick="_ckToggle(this)"'
-      + ' style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #f0ede4;min-height:44px;cursor:pointer;">'
-      + '<div style="width:10px;height:10px;border-radius:50%;border:1.5px solid #ccc;flex-shrink:0;"></div>'
-      + '<div style="flex:1;min-width:0;">'
-        + '<div style="font-size:12px;font-weight:600;">'+addr.n+' '+addr.s+(addr.u?' &middot; '+addr.u:'')+'</div>'
-        + '<div style="font-size:10px;color:var(--subtle);">'+meta.label+'</div>'
-      + '</div></div>';
+  var unsel = adminAddresses.filter(function(a){return !adminSelected[a.id];})
+    .sort(function(a,b){return parseInt(a.n||0)-parseInt(b.n||0);});
+  var unselHtml = unsel.map(function(addr){
+    var meta=PROP_META[addr.t]||PROP_META.house;
+    return '<div class="ck-unsel-row" data-aid="'+addr.id+'" onclick="_ckToggle(this)">'
+      +'<div style="width:8px;height:8px;border-radius:50%;border:1.5px solid #ccc;flex-shrink:0;"></div>'
+      +'<div style="flex:1;min-width:0;font-size:12px;font-weight:600;">'+addr.n+' '+addr.s+(addr.u?' &middot; '+addr.u:'')+'<div style="font-size:10px;color:var(--subtle);font-weight:400;">'+meta.label+'</div></div>'
+      +'</div>';
   }).join('');
 
-  container.innerHTML = routeHtml + divider + unselHtml;
+  container.innerHTML = routeHtml+divider+unselHtml;
 }
 
 function saveAssignments() {
-  if (!currentCanvasserId || !shiftData.neighborhood) { showToast('Select a canvasser first'); return; }
+  var cvId = document.getElementById('assign-canvasser').value;
+  if (!cvId || !shiftData.neighborhood) { showToast('Select a canvasser first'); return; }
   if (!adminRoute.length) { showToast('No addresses selected'); return; }
   var partnerId = document.getElementById('assign-partner').value;
-  var payload = {route: adminRoute, assignments: adminSelected};
-  var saves = [fbPut('/'+shiftData.neighborhood+'/assignments/'+shiftDate+'/'+currentCanvasserId, payload)];
-  if (partnerId && partnerId !== currentCanvasserId) {
+  var payload = {route:adminRoute, assignments:adminSelected};
+  var saves = [fbPut('/'+shiftData.neighborhood+'/assignments/'+shiftDate+'/'+cvId, payload)];
+  if (partnerId && partnerId!==cvId) {
     saves.push(fbPut('/'+shiftData.neighborhood+'/assignments/'+shiftDate+'/'+partnerId, payload));
   }
-  Promise.all(saves).then(function() {
-    allAssignments[currentCanvasserId] = payload;
-    var names = volName(currentCanvasserId) + (partnerId && partnerId!==currentCanvasserId ? ' & '+volName(partnerId) : '');
-    showToast('Saved '+adminRoute.length+' addresses for '+names);
-  }).catch(function(){ showToast('Save failed'); });
+  Promise.all(saves).then(function(){
+    allAssignments[cvId]=payload;
+    showToast('Assignments saved for '+volName(cvId));
+    if (currentCanvasserId===cvId) renderCanvasserView(cvId);
+  }).catch(function(){showToast('Save failed');});
 }
 
-function saveShiftEdits() {
-  var notes = document.getElementById('edit-notes').value.trim();
-  var vols = Array.from(document.querySelectorAll('#edit-vol-grid .vol-check-item.checked')).map(function(el){ return el.dataset.id; });
-  shiftData.notes = notes;
-  shiftData.volunteers = vols;
-  fbPut('/canvass-days/'+shiftDate, shiftData).then(function() {
-    showToast('Shift updated');
-  }).catch(function(){ showToast('Save failed'); });
+function deleteShift() {
+  if (!confirm('Delete shift for '+formatDate(shiftDate)+'? This cannot be undone.')) return;
+  fbPut('/canvass-days/'+shiftDate, null).then(function(){
+    window.location.href='/field-app/admin/shifts.html';
+  }).catch(function(){showToast('Delete failed');});
 }
 
-function loadResults() {
-  if (!shiftData || !shiftData.neighborhood) return;
-  fbGet('/'+shiftData.neighborhood+'/logs/'+shiftDate).then(function(dayLogs) {
-    var el = document.getElementById('shift-results');
-    if (!dayLogs || !Object.keys(dayLogs).length) {
-      el.innerHTML = '<div style="color:var(--subtle);font-size:13px;">No results logged for this shift yet.</div>';
-      return;
-    }
-    var html = '';
-    Object.entries(dayLogs).forEach(function(pair) {
-      var volId=pair[0], volLogs=pair[1];
-      if (!volLogs) return;
-      var entries = Object.values(volLogs);
-      var counts = {};
-      entries.forEach(function(l){ counts[l.contact]=(counts[l.contact]||0)+1; });
-      html += '<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border);">' +
-        '<div style="font-size:13px;font-weight:700;margin-bottom:6px;">'+volName(volId)+' &mdash; '+entries.length+' doors</div>' +
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-          Object.entries(counts).map(function(c){
-            return '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--light);color:var(--muted);">'+c[0]+': '+c[1]+'</span>';
-          }).join('') +
-        '</div></div>';
-    });
-    el.innerHTML = html;
-  });
-}
+function printWalkSheet() {
+  var assignment = allAssignments[currentCanvasserId];
+  var route = assignment && Array.isArray(assignment.route) ? assignment.route : [];
+  if (!route.length) { showToast('No addresses assigned to '+volName(currentCanvasserId)); return; }
+  var addrMap={};
+  adminAddresses.forEach(function(a){addrMap[a.id]=a;});
+  var sorted = route.filter(function(id){return !!addrMap[id];}).map(function(id){return addrMap[id];});
+  var hood=(window.NEIGHBORHOODS||[]).find(function(n){return n.key===shiftData.neighborhood;});
+  var hoodName=hood?hood.displayName:(shiftData.neighborhood||'');
+  var names=volName(currentCanvasserId);
 
-function printWalkSheetFromShift() {
-  if (!adminRoute.length) { showToast('No addresses in route to print'); return; }
-  var addrMap = {};
-  adminAddresses.forEach(function(a){ addrMap[a.id]=a; });
-  var sorted = adminRoute.filter(function(id){ return !!addrMap[id]; }).map(function(id){ return addrMap[id]; });
-  var hood = (window.NEIGHBORHOODS||[]).find(function(n){ return n.key===shiftData.neighborhood; });
-  var hoodName = hood ? hood.displayName : (shiftData.neighborhood||'');
-  var names = volName(currentCanvasserId) || 'Walk Sheet';
-  var partnerId = document.getElementById('assign-partner').value;
-  if (partnerId && partnerId !== currentCanvasserId) names += ' & ' + volName(partnerId);
-
-  var typeLabels = {senior:'55+ — Call first',apartment:'Apt — Coordinate',mobile:'Mobile — Coordinate',assisted:'Assisted — Call first'};
-  var rows = sorted.map(function(addr,i){
-    var meta = addr.t!=='house' ? (typeLabels[addr.t]||'') : '';
-    return '<tr class="'+(parseInt(addr.n||0)%2===1?'odd':'even')+'">' +
-      '<td class="num">'+(i+1)+'</td>' +
-      '<td class="addr"><strong>'+addr.n+'</strong> '+addr.s+(addr.u?' &middot; <span style="font-weight:400;color:#6b6860;">'+addr.u+'</span>':'') +
-        (meta?'<div style="font-size:7.5pt;color:#d97706;font-weight:600;">'+meta+'</div>':'') + '</td>' +
-      '<td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td>' +
-      '<td class="notes"></td></tr>';
+  var typeLabels={senior:'55+ — Call first',apartment:'Apt — Coordinate',mobile:'Mobile — Coordinate',assisted:'Assisted — Call first'};
+  var rows=sorted.map(function(addr,i){
+    var meta=addr.t!=='house'?(typeLabels[addr.t]||''):'';
+    return '<tr class="'+(parseInt(addr.n||0)%2===1?'odd':'even')+'">'
+      +'<td class="num">'+(i+1)+'</td>'
+      +'<td class="addr"><strong>'+addr.n+'</strong> '+addr.s+(addr.u?' &middot; <span style="font-weight:400;color:#6b6860;">'+addr.u+'</span>':'')
+        +(meta?'<div style="font-size:7.5pt;color:#d97706;font-weight:600;">'+meta+'</div>':'')+'</td>'
+      +'<td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td>'
+      +'<td class="notes"></td></tr>';
   }).join('');
 
-  var css = 'body{font-family:Outfit,sans-serif;font-size:9.5pt;color:#1d1b16;margin:0;}' +
-    '.page{padding:10mm 12mm;}' +
-    '.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:6px;border-bottom:3px solid #D4A832;margin-bottom:8px;}' +
-    '.hdr-l .camp{font-size:7.5pt;font-weight:800;color:#9A7215;}.hdr-l .title{font-size:14pt;font-weight:800;}.hdr-l .meta{font-size:8pt;color:#6b6860;}' +
-    '.hdr-r{text-align:right;}.hdr-r .cnt{font-size:20pt;font-weight:800;color:#D4A832;line-height:1;}.hdr-r .lbl{font-size:7pt;color:#6b6860;text-transform:uppercase;}' +
-    'table{width:100%;border-collapse:collapse;}' +
-    'th{font-size:7pt;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#6b6860;padding:4px;border-bottom:2px solid #e0ddd3;text-align:center;}' +
-    'th.al{text-align:left;}td{padding:4px;border-bottom:1px solid #f0ede4;vertical-align:middle;}' +
-    '.odd{background:#fff;}.even{background:#faf8f4;}' +
-    '.num{width:20px;text-align:right;padding-right:6px;font-size:8.5pt;font-weight:800;color:#a8a49a;}' +
-    '.addr{font-size:9.5pt;font-weight:700;min-width:160px;}' +
-    '.cb{width:26px;text-align:center;border-left:1px solid #e8e4dc;}' +
-    '.cb::after{content:"";display:inline-block;width:10px;height:10px;border:1.5px solid #888;border-radius:2px;}' +
-    '.notes{min-width:100px;border-left:1px solid #e8e4dc;}' +
-    '.footer{margin-top:8px;padding-top:4px;border-top:1px solid #e0ddd3;font-size:7.5pt;color:#a8a49a;display:flex;justify-content:space-between;}' +
-    '@media print{body{margin:0;}tr{page-break-inside:avoid;}}';
+  var css='body{font-family:Outfit,sans-serif;font-size:9.5pt;color:#1d1b16;margin:0;}'
+    +'.page{padding:10mm 12mm;}'
+    +'.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:6px;border-bottom:3px solid #D4A832;margin-bottom:8px;}'
+    +'.hdr-l .camp{font-size:7.5pt;font-weight:800;color:#9A7215;}.hdr-l .title{font-size:14pt;font-weight:800;}.hdr-l .meta{font-size:8pt;color:#6b6860;}'
+    +'.hdr-r{text-align:right;}.hdr-r .cnt{font-size:20pt;font-weight:800;color:#D4A832;line-height:1;}.hdr-r .lbl{font-size:7pt;color:#6b6860;text-transform:uppercase;}'
+    +'table{width:100%;border-collapse:collapse;}'
+    +'th{font-size:7pt;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#6b6860;padding:4px;border-bottom:2px solid #e0ddd3;text-align:center;}'
+    +'th.al{text-align:left;}td{padding:4px;border-bottom:1px solid #f0ede4;vertical-align:middle;}'
+    +'.odd{background:#fff;}.even{background:#faf8f4;}'
+    +'.num{width:20px;text-align:right;padding-right:6px;font-size:8.5pt;font-weight:800;color:#a8a49a;}'
+    +'.addr{font-size:9.5pt;font-weight:700;min-width:160px;}'
+    +'.cb{width:26px;text-align:center;border-left:1px solid #e8e4dc;}'
+    +'.cb::after{content:"";display:inline-block;width:10px;height:10px;border:1.5px solid #888;border-radius:2px;}'
+    +'.notes{min-width:100px;border-left:1px solid #e8e4dc;}'
+    +'.footer{margin-top:8px;padding-top:4px;border-top:1px solid #e0ddd3;font-size:7.5pt;color:#a8a49a;display:flex;justify-content:space-between;}'
+    +'@media print{body{margin:0;}tr{page-break-inside:avoid;}}';
 
-  var body = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
-    '<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">' +
-    '<title>Walk Sheet</title><style>'+css+'</style></head><body>' +
-    '<div class="page">' +
-    '<div class="hdr"><div class="hdr-l"><div class="camp">Cassie for Roseville &mdash; Field App</div><div class="title">Walk Sheet: '+names+'</div><div class="meta">'+hoodName+' &middot; '+formatDateLong(shiftDate)+'</div></div>' +
-    '<div class="hdr-r"><div class="cnt">'+sorted.length+'</div><div class="lbl">Addresses</div></div></div>' +
-    '<table><thead><tr><th></th><th class="al">Address</th><th>Not Home</th><th>Vacant</th><th>For Sale</th><th>No Solic.</th><th>Refused</th><th>Accepted</th><th>Other</th><th style="text-align:left;padding-left:6px;">Notes / Contact / Sign</th></tr></thead>' +
-    '<tbody>'+rows+'</tbody></table>' +
-    '<div class="footer"><span>Cassie Iverson for Roseville City Council 2026 &middot; cassie4roseville.com</span><span>Printed '+new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</span></div>' +
-    '</div><script>window.onload=function(){window.print();};<\/script></body></html>';
+  var body='<!DOCTYPE html><html><head><meta charset="UTF-8">'
+    +'<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">'
+    +'<title>Walk Sheet</title><style>'+css+'</style></head><body>'
+    +'<div class="page">'
+    +'<div class="hdr"><div class="hdr-l"><div class="camp">Cassie for Roseville &mdash; Field App</div><div class="title">Walk Sheet: '+names+'</div><div class="meta">'+hoodName+' &middot; '+formatDateLong(shiftDate)+'</div></div>'
+    +'<div class="hdr-r"><div class="cnt">'+sorted.length+'</div><div class="lbl">Addresses</div></div></div>'
+    +'<table><thead><tr><th></th><th class="al">Address</th><th>Not Home</th><th>Vacant</th><th>For Sale</th><th>No Solic.</th><th>Refused</th><th>Accepted</th><th>Other</th><th style="text-align:left;padding-left:6px;">Notes / Contact / Sign</th></tr></thead>'
+    +'<tbody>'+rows+'</tbody></table>'
+    +'<div class="footer"><span>Cassie Iverson for Roseville City Council 2026 &middot; cassie4roseville.com</span><span>Printed '+new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</span></div>'
+    +'</div><script>window.onload=function(){window.print();};<\/script></body></html>';
 
   try {
-    var blob = new Blob([body], {type:'text/html'});
-    var url = URL.createObjectURL(blob);
-    var w = window.open(url, '_blank');
-    if (!w) showToast('Allow popups to print');
-    setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
-  } catch(e) { showToast('Print error: '+e.message); }
+    var blob=new Blob([body],{type:'text/html'});
+    var url=URL.createObjectURL(blob);
+    var w=window.open(url,'_blank');
+    if(!w) showToast('Allow popups to print');
+    setTimeout(function(){URL.revokeObjectURL(url);},60000);
+  } catch(e){showToast('Print error: '+e.message);}
 }
 
 var _tt;
