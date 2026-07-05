@@ -185,42 +185,11 @@ function loadStats() {
   });
 }
 
-
-function safeInitMap(containerId, callback) {
-  var el = document.getElementById(containerId);
-  if (!el) return;
-  // If already has dimensions, init immediately
-  if (el.offsetWidth > 0 && el.offsetHeight > 0) {
-    callback();
-    return;
-  }
-  // Otherwise wait for it to become visible
-  if (window.ResizeObserver) {
-    var ro = new ResizeObserver(function(entries) {
-      if (el.offsetWidth > 0 && el.offsetHeight > 0) {
-        ro.disconnect();
-        callback();
-      }
-    });
-    ro.observe(el);
-  } else {
-    // Fallback: poll
-    var tries = 0;
-    var interval = setInterval(function() {
-      if (el.offsetWidth > 0 && el.offsetHeight > 0 || tries++ > 20) {
-        clearInterval(interval);
-        if (el.offsetWidth > 0) callback();
-      }
-    }, 100);
-  }
-}
-
 function initDashMap() {
-  safeInitMap('dash-map', function() {
-    dashMap = L.map('dash-map', {zoomControl:true}).setView([45.017,-93.153], 14);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-      attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
-    }).addTo(dashMap);
+  dashMap = L.map('dash-map', {zoomControl:true}).setView([45.017,-93.153], 14);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
+  }).addTo(dashMap);
 
   var COLORS = {'Not Home':'#64748b','Vacant':'#475569','For Sale':'#7c3aed',
     'No Soliciting':'#92400e','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb'};
@@ -235,17 +204,16 @@ function initDashMap() {
           var addr = (window.NEIGHBORHOOD_DATA[n.key]||[]).find(function(a){return a.id===addrId;});
           if (!addr) return;
           var color = COLORS[log.contact] || '#888';
-          var extraPin = log.wantContact ? '<div style="position:absolute;top:-4px;right:-4px;width:8px;height:8px;background:#D4A832;border-radius:50%;border:1px solid #fff;"></div>' : '';
-          var icon = L.divIcon({className:'',html:'<div style="position:relative;width:12px;height:12px;background:'+color+';border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);">'+extraPin+'</div>',iconSize:[12,12],iconAnchor:[6,6]});
+          var dot = log.wantContact ? '<div style="position:absolute;top:-4px;right:-4px;width:8px;height:8px;background:#D4A832;border-radius:50%;border:1px solid #fff;"></div>' : '';
+          var icon = L.divIcon({className:'',html:'<div style="position:relative;width:12px;height:12px;background:'+color+';border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);">'+dot+'</div>',iconSize:[12,12],iconAnchor:[6,6]});
           L.marker([addr.lat,addr.lng],{icon:icon})
-           .bindTooltip(addr.n+' '+addr.s+' — '+log.contact)
+           .bindTooltip(addr.n+' '+addr.s+' - '+log.contact)
            .addTo(dashMap);
         });
       });
     });
   });
 }
-});
 </script>
 </body>
 </html>
