@@ -254,7 +254,19 @@ function activeVols(){
 function buildCanvasserTabs() {
   var tabs = document.getElementById('canvasser-tabs');
   var vols = shiftData.volunteers || [];
-  if (!vols.length) { tabs.innerHTML='<div style="color:var(--subtle);font-size:13px;">No volunteers assigned to this shift.</div>'; return; }
+
+  // Fallback: if no volunteers listed, use whoever has assignments or logs
+  if (!vols.length) {
+    var fromAssign = Object.keys(allAssignments);
+    var fromLogs = Object.keys(allLogs);
+    var all = fromAssign.concat(fromLogs.filter(function(id){ return fromAssign.indexOf(id)===-1; }));
+    vols = all;
+  }
+
+  if (!vols.length) {
+    tabs.innerHTML='<div style="color:var(--subtle);font-size:13px;">No volunteers found for this shift.</div>';
+    return;
+  }
 
   document.getElementById('print-btn').style.display='inline-flex';
 
