@@ -50,15 +50,15 @@ function initFirebaseCanvasser() {
   fbGet('/.json?shallow=true')
     .then(function(){
       fbConnected = true;
-      return loadRoster();
+      return Promise.all([loadRoster(), loadCanvassDays()]);
     })
     .then(function(){
       document.getElementById('setup-loading').style.display='none';
       document.getElementById('setup-fields').style.display='flex';
       buildSetupSelects();
     })
-    .catch(function(){
-      document.getElementById('setup-loading').textContent='Could not load roster — check connection.';
+    .catch(function(e){
+      document.getElementById('setup-loading').textContent='Could not connect — check your internet connection.';
     });
 }
 
@@ -646,6 +646,7 @@ var mode = 'canvass';
 var activeFilter = 'all';
 var logs = {};
 var myAssignments = {};
+var myRoute = [];
 var addrToVolId = {};
 var signs = [];
 var markers = {};
@@ -1374,8 +1375,11 @@ function markerColor(addr){
 }
 
 function createMarker(addr){
-  var color=markerColor(addr),mine=isMyAddr(addr),size=mine?14:9,op=mine?1:.35;
-  var icon=L.divIcon({className:'',html:'<div style="width:'+size+'px;height:'+size+'px;background:'+color+';border:'+(mine?'2px solid rgba(0,0,0,.2)':'1.5px solid rgba(0,0,0,.1)')+';border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.2);cursor:pointer;opacity:'+op+'"></div>',iconSize:[size,size],iconAnchor:[size/2,size/2]});
+  var color=markerColor(addr),mine=isMyAddr(addr),size=mine?20:9,op=mine?1:.35;
+  var routeIdx = mine ? myRoute.indexOf(addr.id) : -1;
+  var isDone = !!logs[addr.id];
+  var label = (mine && routeIdx>=0 && !isDone) ? '<span style="font-size:9px;font-weight:800;color:#fff;">'+(routeIdx+1)+'</span>' : '';
+  var icon=L.divIcon({className:'',html:'<div style="width:'+size+'px;height:'+size+'px;background:'+color+';border:'+(mine?'2px solid rgba(0,0,0,.2)':'1.5px solid rgba(0,0,0,.1)')+';border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.2);cursor:pointer;opacity:'+op+';display:flex;align-items:center;justify-content:center;">'+label+'</div>',iconSize:[size,size],iconAnchor:[size/2,size/2]});
   var m=L.marker([addr.lat,addr.lng],{icon:icon}).addTo(map);
   m.bindPopup(makePopup(addr),{maxWidth:270,closeButton:true});
   m.on('click',function(e){
@@ -1420,12 +1424,14 @@ function renderMyList(){
     container.innerHTML='<div style="padding:32px;text-align:center;color:var(--subtle);font-size:13px;"><div style="font-size:32px;margin-bottom:12px;">\uD83D\uDCCB</div>No addresses assigned yet.<br>Check back after your shift is set up.</div>';
     return;
   }
-  mine.sort(function(a,b){var al=!!logs[a.id],bl=!!logs[b.id];if(al!==bl)return al?1:-1;return parseInt(a.n||0)-parseInt(b.n||0);});
+  mine.sort(function(a,b){var al=!!logs[a.id],bl=!!logs[b.id];if(al!==bl)return al?1:-1;var ai=myRoute.indexOf(a.id),bi=myRoute.indexOf(b.id);if(ai===-1)ai=999;if(bi===-1)bi=999;return ai-bi;});
   container.innerHTML=mine.map(function(addr){
     var log=logs[addr.id],meta=PROP_META[addr.t]||PROP_META.house;
     var dotColor=log?(CONTACT_COLORS[log.contact]||'#888'):'#D4A832';
     var badge=log?'<span class="addr-badge" style="background:'+(CONTACT_COLORS[log.contact]||'#888')+'22;color:'+(CONTACT_COLORS[log.contact]||'#888')+';">'+log.contact+'</span>':'<span class="addr-badge" style="background:'+meta.color+'18;color:'+meta.color+';">'+meta.label+'</span>';
-    return '<div class="addr-item is-mine'+(addr.id===selectedId?' selected':'')+'" data-aid="'+addr.id+'" onclick="handleAddrClick(this.dataset.aid)"><div class="addr-dot" style="background:'+dotColor+';"></div><div class="addr-info"><div class="addr-street">'+addrLabel(addr)+'</div><div class="addr-meta">'+addr.s+(log&&log.interest?' \u00B7 \u2605'+log.interest:'')+'</div></div>'+badge+'</div>';
+    var routeIdx = myRoute.indexOf(addr.id);
+    var numLabel = (!log && routeIdx>=0) ? '<span style="color:var(--gold-acc);font-weight:800;margin-right:4px;">'+(routeIdx+1)+'.</span>' : '';
+    return '<div class="addr-item is-mine'+(addr.id===selectedId?' selected':'')+'" data-aid="'+addr.id+'" onclick="handleAddrClick(this.dataset.aid)"><div class="addr-dot" style="background:'+dotColor+';"></div><div class="addr-info"><div class="addr-street">'+numLabel+addrLabel(addr)+'</div><div class="addr-meta">'+addr.s+(log&&log.interest?' \u00B7 \u2605'+log.interest:'')+'</div></div>'+badge+'</div>';
   }).join('');
 }
 
@@ -1486,10 +1492,11 @@ document.querySelectorAll('.tab').forEach(function(tab){
 function openDoor(id){
   modalId=id;
   var addr=addresses.find(function(a){return a.id===id;}); if(!addr) return;
-  document.getElementById('door-title').textContent=addrLabel(addr);
-  document.getElementById('door-sub').textContent='Roseville, MN 55113 \u00B7 '+addr.s;
+  var titleEl=document.getElementById('door-title'); if(titleEl) titleEl.textContent=addrLabel(addr);
+  var subEl=document.getElementById('door-sub'); if(subEl) subEl.textContent='Roseville, MN 55113 \u00B7 '+addr.s;
   var meta=PROP_META[addr.t]||PROP_META.house;
-  document.getElementById('door-callout').innerHTML=meta.callout?'<div class="prop-callout '+meta.callout.cls+'">'+meta.callout.icon+' '+meta.callout.text+'</div>':'';
+  var calloutEl=document.getElementById('door-callout');
+  if(calloutEl) calloutEl.innerHTML=meta.callout?'<div class="prop-callout '+meta.callout.cls+'">'+meta.callout.icon+' '+meta.callout.text+'</div>':'';
   document.querySelectorAll('.contact-btn').forEach(function(b){b.classList.remove('active');});
   document.querySelectorAll('.interest-btn').forEach(function(b){b.classList.remove('active');});
   ['chk-lit','chk-contact','chk-sign'].forEach(function(cid){document.getElementById(cid).classList.remove('checked');});
@@ -1634,16 +1641,18 @@ function pullCanvasserData(){
     if(!d||typeof d!=='object') return;
     addrToVolId={};
     myAssignments={};
+    myRoute=[];
     Object.entries(d).forEach(function(pair){
       var vid=pair[0], data=pair[1];
       if(!data) return;
       // Handle new {route,assignments} format and legacy flat format
       var assigns = (data.assignments && typeof data.assignments==='object')
         ? data.assignments : data;
-      Object.keys(assigns).forEach(function(addrId){
+      var route = Array.isArray(data.route) ? data.route : Object.keys(assigns);
+      route.forEach(function(addrId){
         if(addrId==='route'||addrId==='assignments') return;
         addrToVolId[addrId]=vid;
-        if(vid===myVolId) myAssignments[addrId]=true;
+        if(vid===myVolId){ myAssignments[addrId]=true; myRoute.push(addrId); }
       });
     });
     // Detect partner: another vol with same assignments on same day
