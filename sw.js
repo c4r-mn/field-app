@@ -1,5 +1,5 @@
 // Cassie for Roseville — Field App Service Worker
-var CACHE = 'c4r-v3';
+var CACHE = 'c4r-v4';
 var STATIC = [
   '/field-app/',
   '/field-app/index.html',
@@ -42,13 +42,29 @@ self.addEventListener('fetch', function(e) {
       e.request.url.indexOf('config.json') !== -1) {
     return;
   }
+  // HTML files: network-first so updates are always picked up
+  var isHtml = e.request.url.endsWith('.html') || e.request.url.endsWith('/');
+  if (isHtml) {
+    e.respondWith(
+      fetch(e.request).then(function(resp) {
+        var clone = resp.clone();
+        caches.open(CACHE).then(function(c){ c.put(e.request, clone); });
+        return resp;
+      }).catch(function() {
+        return caches.match(e.request);
+      })
+    );
+    return;
+  }
+  // JS/CSS: cache-first but update in background
   e.respondWith(
     caches.match(e.request).then(function(cached) {
-      return cached || fetch(e.request).then(function(resp) {
+      var fetchPromise = fetch(e.request).then(function(resp) {
         var clone = resp.clone();
         caches.open(CACHE).then(function(c){ c.put(e.request, clone); });
         return resp;
       });
+      return cached || fetchPromise;
     }).catch(function() {
       return caches.match('/field-app/');
     })
