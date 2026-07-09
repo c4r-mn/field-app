@@ -132,11 +132,17 @@ function activeVols() {
 
 function buildNewForm() {
   var sel = document.getElementById('new-hood');
+  // Reset first to prevent duplicates
+  sel.innerHTML = '<option value="">— Select neighborhood —</option>';
   (window.NEIGHBORHOODS||[]).forEach(function(n) {
     var o = document.createElement('option');
     o.value = n.key; o.textContent = n.displayName;
     sel.appendChild(o);
   });
+  // If only one neighborhood, auto-select it
+  if ((window.NEIGHBORHOODS||[]).length === 1) {
+    sel.value = window.NEIGHBORHOODS[0].key;
+  }
   var grid = document.getElementById('new-vol-grid');
   var vols = activeVols();
   grid.innerHTML = vols.map(function(v) {
