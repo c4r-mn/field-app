@@ -169,11 +169,12 @@ function saveNewShift() {
   if (!date) { showToast('Pick a date'); return; }
   if (!hood) { showToast('Pick a neighborhood'); return; }
   var vols = Array.from(document.querySelectorAll('#new-vol-grid .vol-check-item.checked')).map(function(el){ return el.dataset.id; });
-  canvassDays[date] = { neighborhood:hood, notes:notes, volunteers:vols, created:new Date().toISOString() };
-  fbPut('/canvass-days/'+date, canvassDays[date]).then(function() {
-    toggleNewForm();
-    renderShifts();
-    showToast('Shift created for '+formatDate(date));
+  var shiftObj = { neighborhood:hood, notes:notes, volunteers:vols, created:new Date().toISOString() };
+  fbPut('/canvass-days/'+date, shiftObj).then(function() {
+    showToast('Shift created — opening route planner...');
+    setTimeout(function(){
+      window.location.href = '/field-app/admin/shift.html?date=' + encodeURIComponent(date);
+    }, 500);
   }).catch(function(){ showToast('Save failed'); });
 }
 

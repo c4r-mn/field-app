@@ -139,7 +139,7 @@
         <button class="btn btn-gold" onclick="saveAssignments()">Save Route</button>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;" id="assign-grid" style="display:none;">
+      <div id="assign-grid" style="display:none;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
         <div class="page-card" style="padding:12px;">
           <div class="page-card-title" style="margin-bottom:8px;">Map</div>
           <div id="shift-map" style="height:400px;border-radius:8px;border:1px solid var(--border);"></div>
@@ -547,9 +547,16 @@ function loadAssignMode() {
   // Show the map+checklist grid
   var grid = document.getElementById('assign-grid');
   if (grid) grid.style.display = 'grid';
+  // Give the browser a tick to lay out before initializing the map
+  setTimeout(function(){ initOrRefreshShiftMap(); }, 30);
 
-  // Init or refresh map
+  renderAssignChecklist();
+}
+
+function initOrRefreshShiftMap() {
   if (!shiftMap) {
+    var el = document.getElementById('shift-map');
+    if (!el) return;
     shiftMap = L.map('shift-map').setView([45.017,-93.153], 15);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
       attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
@@ -562,7 +569,6 @@ function loadAssignMode() {
   }
   shiftMap.invalidateSize();
   refreshAssignMapMarkers();
-  renderAssignChecklist();
 }
 
 // Global checklist handlers
