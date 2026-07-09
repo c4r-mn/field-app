@@ -72,12 +72,25 @@ function startFirebase(onAdmin, onCanvasser) {
   var googleProvider = new firebase.auth.GoogleAuthProvider();
 
   // Real implementations
+  var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
   window.doGoogleLogin = function() {
     showAuthMsg('');
-    auth.signInWithPopup(googleProvider).catch(function(e) {
-      if (e.code !== 'auth/popup-closed-by-user') showAuthMsg(friendlyError(e.code), true);
-    });
+    if (isMobile) {
+      auth.signInWithRedirect(googleProvider).catch(function(e) {
+        showAuthMsg(friendlyError(e.code), true);
+      });
+    } else {
+      auth.signInWithPopup(googleProvider).catch(function(e) {
+        if (e.code !== 'auth/popup-closed-by-user') showAuthMsg(friendlyError(e.code), true);
+      });
+    }
   };
+
+  // Handle redirect result on page load (for mobile)
+  auth.getRedirectResult().catch(function(e) {
+    if (e.code && e.code !== 'auth/null-user') showAuthMsg(friendlyError(e.code), true);
+  });
 
   window.doEmailLogin = function() {
     var email = (document.getElementById('auth-email') || {}).value || '';
