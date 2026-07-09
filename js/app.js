@@ -50,15 +50,15 @@ function initFirebaseCanvasser() {
   fbGet('/.json?shallow=true')
     .then(function(){
       fbConnected = true;
-      return loadRoster();
+      return Promise.all([loadRoster(), loadCanvassDays()]);
     })
     .then(function(){
       document.getElementById('setup-loading').style.display='none';
       document.getElementById('setup-fields').style.display='flex';
       buildSetupSelects();
     })
-    .catch(function(){
-      document.getElementById('setup-loading').textContent='Could not load roster — check connection.';
+    .catch(function(e){
+      document.getElementById('setup-loading').textContent='Could not connect — check your internet connection.';
     });
 }
 
@@ -1919,3 +1919,5 @@ function formatDate(dateStr) {
 
 // ── BOOT ──────────────────────────────────
 // Boot handled by js/auth.js
+
+
