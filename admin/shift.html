@@ -213,13 +213,22 @@ initAuth(
 
 function loadShift() {
   setFbBase();
+  if (!fbBase) {
+    document.getElementById('shift-title').textContent='Config not loaded yet — refresh the page';
+    return;
+  }
+  document.getElementById('shift-sub').textContent='Loading: '+shiftDate+'...';
   Promise.all([
     fbGet('/roster'),
     fbGet('/canvass-days/'+shiftDate),
   ]).then(function(r) {
     roster = r[0] || {};
     shiftData = r[1];
-    if (!shiftData) { document.getElementById('shift-title').textContent='Shift not found'; return; }
+    if (!shiftData) {
+      document.getElementById('shift-title').textContent='Shift not found';
+      document.getElementById('shift-sub').textContent='No shift data at /canvass-days/'+shiftDate+'. Check Firebase.';
+      return;
+    }
 
     var hood = (window.NEIGHBORHOODS||[]).find(function(n){return n.key===shiftData.neighborhood;});
     var hoodName = hood ? hood.displayName : (shiftData.neighborhood||'');
@@ -239,6 +248,9 @@ function loadShift() {
       buildCanvasserTabs();
       buildDangerZone();
     });
+  }).catch(function(e) {
+    document.getElementById('shift-title').textContent='Load error';
+    document.getElementById('shift-sub').textContent=e.message;
   });
 }
 
