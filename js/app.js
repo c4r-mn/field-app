@@ -1283,6 +1283,8 @@ function buildSetupSelects() {
       ds.appendChild(o);
     });
   }
+  // Trigger validation now that fields may be pre-selected
+  onSetupChange();
 }
 function onSetupChange() {
   var name=(document.getElementById('setup-name')||{}).value||'';
@@ -1928,5 +1930,3 @@ function formatDate(dateStr) {
 
 // ── BOOT ──────────────────────────────────
 // Boot handled by js/auth.js
-
-
