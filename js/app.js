@@ -1269,9 +1269,10 @@ function buildSetupSelects() {
   var ds=document.getElementById('setup-date');
   if(ds){
     ds.innerHTML='<option value="">— Select shift date —</option>';
-    var today=new Date().toISOString().slice(0,10);
+    var now=new Date();
+    var today=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
     var days=Object.keys(canvassDays).sort().reverse();
-    if(days.indexOf(today)===-1) days.unshift(today);
+    // Only show dates that have a real shift scheduled — no synthetic "today" entry
     days.forEach(function(date){
       var o=document.createElement('option');
       o.value=date;
