@@ -127,7 +127,7 @@ function startFirebase(onAdmin, onCanvasser) {
       });
     } else {
       if (typeof onAdmin === 'function') onAdmin(_currentUser);
-      else if (!window.location.pathname.includes('/admin')) window.location.href = '/field-app/admin/';
+      else if (!window.location.pathname.includes('/admin')) window.location.href = '/field-app/admin/index.html';
     }
   });
 
