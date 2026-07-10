@@ -2,18 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Cassie for Roseville — Canvass</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Field View — Cassie for Roseville Field App</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/app.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
-  <link rel="stylesheet" href="/field-app/css/app.css">
-  <style>
-    #app{overflow:hidden;height:calc(100vh - 36px);}
-    #setup-screen{overflow-y:auto;}
-  </style>
-  <script>
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/field-app/sw.js');
-  </script>
 </head>
 <body>
 
@@ -24,173 +17,71 @@
   </div>
 </div>
 
-<!-- CANVASSER SETUP -->
-<div id="setup-screen" style="position:fixed;inset:0;padding-top:36px;background:var(--cream);z-index:9000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:36px 20px 20px;gap:11px;">
-  <div style="font-size:28px;">🌹</div>
-  <div style="font-size:18px;font-weight:800;color:var(--gold-acc);">Cassie for Roseville</div>
-  <div id="setup-loading" style="font-size:13px;color:var(--muted);">Loading…</div>
-  <div id="setup-fields" style="display:none;width:100%;max-width:340px;display:flex;flex-direction:column;align-items:center;gap:11px;">
-    <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--gold-acc);align-self:flex-start;">Your Name</div>
-    <select class="setup-select" id="setup-name" onchange="onSetupChange()" style="width:100%;">
-      <option value="">— Select your name —</option>
-    </select>
-    <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--gold-acc);align-self:flex-start;">Shift Date</div>
-    <select class="setup-select" id="setup-date" onchange="onSetupChange()" style="width:100%;">
-      <option value="">— Select shift date —</option>
-    </select>
-    <button class="setup-btn" id="setup-btn" disabled onclick="startApp()">Start Canvassing →</button>
-    <div class="hood-note" id="hood-note" style="display:none;"></div>
-  </div>
-</div>
-
-
-<div id="app" style="display:none;">
-  <div id="topbar">
-    <div>
-      <div class="topbar-brand">🌹 Cassie for Roseville</div>
-      <div class="topbar-sub" id="topbar-sub">Field App</div>
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <div class="admin-sidebar-brand">
+      <div class="brand-name">Cassie for Roseville</div>
+      <div class="brand-sub">Field Operations Admin</div>
     </div>
-    <div id="mode-toggle" style="display:none;"></div>
-    <div id="user-badge" onclick="showUserMenu()">— ▾</div>
+    <nav class="admin-nav">
+      <div class="admin-nav-section">Overview</div>
+      <a href="/field-app/admin/" class="admin-nav-link"><span class="admin-nav-icon">🗺</span> Dashboard</a>
+      <div class="admin-nav-section">Operations</div>
+      <a href="/field-app/admin/shifts.html" class="admin-nav-link"><span class="admin-nav-icon">📅</span> Shifts</a>
+      <a href="/field-app/admin/roster.html" class="admin-nav-link"><span class="admin-nav-icon">👥</span> Roster</a>
+      <div class="admin-nav-section">Field</div>
+      <a href="/field-app/admin/field.html" class="admin-nav-link active"><span class="admin-nav-icon">📍</span> Field View</a>
+    </nav>
+  </aside>
+  <div class="mobile-nav">
+    <a href="/field-app/admin/" class="mobile-nav-link">Dashboard</a>
+    <a href="/field-app/admin/shifts.html" class="mobile-nav-link">Shifts</a>
+    <a href="/field-app/admin/roster.html" class="mobile-nav-link">Roster</a>
+    <a href="/field-app/admin/field.html" class="mobile-nav-link active">Field View</a>
   </div>
-  <div id="main">
-    <div id="map"></div>
-    <div id="map-legend">
-      <div class="legend-row"><div class="legend-dot" style="background:var(--gold);"></div>Your Assignment</div>
-      <div class="legend-row"><div class="legend-dot" style="background:var(--prop-house);"></div>House</div>
-      <div class="legend-row"><div class="legend-dot" style="background:var(--prop-senior);"></div>55+ (call first)</div>
-      <div class="legend-row"><div class="legend-dot" style="background:var(--prop-apartment);"></div>Apt (coordinate)</div>
-      <div class="legend-row"><div class="legend-dot" style="background:var(--prop-mobile);"></div>Mobile Home (coord.)</div>
-      <div class="legend-row"><div class="legend-dot" style="background:#9ca3af;"></div>Logged</div>
-    </div>
-    <div id="sidebar">
-      <div id="tabs">
-        <div class="tab active" data-panel="addresses">My List</div>
-        <div class="tab" data-panel="all">All</div>
-        <div class="tab" data-panel="log">Log</div>
-        <div class="tab" data-panel="export">Summary</div>
+  <main class="admin-content" style="padding-bottom:0;">
+
+    <div class="admin-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px;">
+      <div>
+        <div class="admin-page-title">Field View</div>
+        <div class="admin-page-sub" id="field-sub">Loading...</div>
       </div>
-      <div class="panel active" id="panel-addresses"><div id="my-list-container"></div></div>
-      <div class="panel" id="panel-all">
-        <div id="filter-bar">
-          <input type="text" id="search-input" placeholder="Search addresses…" oninput="renderAllList()">
-          <div class="filter-chip active" data-f="all" onclick="setFilter('all')">All</div>
-          <div class="filter-chip" data-f="house" onclick="setFilter('house')">🏠 Houses</div>
-          <div class="filter-chip" data-f="apartment" onclick="setFilter('apartment')">🏢 Apts</div>
-          <div class="filter-chip" data-f="senior" onclick="setFilter('senior')">🏛 55+</div>
-          <div class="filter-chip" data-f="mobile" onclick="setFilter('mobile')">🏘 Mobile</div>
-        </div>
-        <div id="addr-list"></div>
-      </div>
-      <div class="panel" id="panel-log"><div id="log-list"></div></div>
-      <div class="panel" id="panel-export">
-        <div class="panel-inner">
-          <div class="section-label">Today's Results</div>
-          <div id="export-stats"></div>
-          <div class="section-label">Download</div>
-          <button class="btn btn-gold" onclick="exportCSV()">⬇ Download CSV</button>
-          <button class="btn btn-outline" onclick="copyCSV()">📋 Copy CSV</button>
-          <div class="section-label">Sync</div>
-          <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--light);border-radius:8px;margin-bottom:8px;">
-            <div style="width:8px;height:8px;border-radius:50%;background:#aaa;" id="fb-dot"></div>
-            <div style="font-size:12px;color:var(--muted);" id="fb-lbl">Connecting…</div>
-          </div>
-          <button class="btn btn-outline" onclick="initFirebase()">Reconnect</button>
-          <div class="section-label" style="margin-top:16px;">Reset</div>
-          <button class="btn btn-danger" onclick="confirmClear()">Clear My Results</button>
-        </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" onclick="exportList('contact')">Cassie to Contact CSV</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportList('signs')">Yard Signs CSV</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportList('nosolic')">No Soliciting CSV</button>
       </div>
     </div>
-  </div>
-</div>
 
-<button id="fab-toggle" onclick="toggleMobileView()">☰ List</button>
-
-<!-- USER MENU -->
-<div class="overlay" id="user-menu-overlay" onclick="bgClose(event,'user-menu-overlay')">
-  <div class="sheet" style="max-height:42vh;">
-    <div class="handle"></div>
-    <div class="sheet-title" id="user-menu-name" style="margin-bottom:16px;"></div>
-    <button class="btn btn-outline" onclick="closeOverlay('user-menu-overlay');goSetup();" style="margin-bottom:10px;">🔄 Switch Team Member</button>
-    <button class="btn btn-danger" onclick="closeOverlay('user-menu-overlay');saveAndExit();">💾 Save & Exit</button>
-  </div>
-</div>
-
-
-
-<!-- DOOR MODAL -->
-
-
-<div class="overlay" id="door-overlay" onclick="bgClose(event,'door-overlay')">
-  <div class="sheet">
-    <div class="handle"></div>
-    <div class="sheet-title" id="door-title">Loading…</div>
-    <div id="door-sub" style="font-size:11px;color:var(--muted);margin-bottom:6px;"></div>
-    <div id="door-callout"></div>
-
-    <!-- Contact result buttons -->
-    <span class="field-label">Contact Result</span>
-    <div class="contact-grid">
-      <div class="contact-btn" data-r="Not Home" onclick="selContact(this)">Not Home</div>
-      <div class="contact-btn" data-r="Vacant" onclick="selContact(this)">Vacant</div>
-      <div class="contact-btn" data-r="For Sale" onclick="selContact(this)">For Sale</div>
-      <div class="contact-btn" data-r="No Soliciting" onclick="selContact(this)">No Soliciting</div>
-      <div class="contact-btn" data-r="Refused" onclick="selContact(this)">Refused</div>
-      <div class="contact-btn" data-r="Accepted" onclick="selContact(this)">Accepted</div>
-      <div class="contact-btn" data-r="Other Language" onclick="selContact(this)">Other Language</div>
+    <div class="field-filters">
+      <span style="font-size:11px;font-weight:700;color:var(--muted);">Date:</span>
+      <select id="date-select" class="form-input" style="width:auto;padding:5px 10px;font-size:12px;" onchange="setDateFilter(this.value)">
+        <option value="all">All Dates</option>
+      </select>
+      <span style="font-size:11px;font-weight:700;color:var(--muted);margin-left:8px;">Show:</span>
+      <div class="filter-pill active" data-show="completed" onclick="toggleShow('completed')">Completed</div>
+      <div class="filter-pill active" data-show="not-knocked" onclick="toggleShow('not-knocked')">Not Knocked</div>
+      <div class="filter-pill active" data-show="upcoming" onclick="toggleShow('upcoming')">Upcoming</div>
+      <div class="filter-pill active" data-show="nosolic" onclick="toggleShow('nosolic')">No Soliciting</div>
+      <div class="filter-pill active" data-show="contact" onclick="toggleShow('contact')">Cassie to Contact</div>
     </div>
 
-    <!-- Actions -->
-    <div class="checks">
-      <div class="check-row" id="chk-lit" onclick="this.classList.toggle('checked')"><div class="check-box">✓</div><div class="check-label">📄 Literature Left</div></div>
-      <div class="check-row" id="chk-contact" onclick="toggleWantsContact(this)"><div class="check-box">✓</div><div class="check-label">📞 Cassie to Contact</div></div>
-      <div id="contact-fields" style="display:none;background:var(--light);border-radius:8px;padding:10px 12px;margin-bottom:8px;">
-        <span class="field-label">First Name <span style="color:var(--red);">*</span></span>
-        <input class="field-input" id="door-name" type="text" placeholder="First name (required)…" style="margin-bottom:8px;">
-        <span class="field-label">Last Name (optional)</span>
-        <input class="field-input" id="door-lastname" type="text" placeholder="Last name…" style="margin-bottom:8px;">
-        <span class="field-label">Phone (optional)</span>
-        <input class="field-input" id="door-phone" type="tel" placeholder="Phone number…" style="margin-bottom:8px;">
-        <span class="field-label">Email (optional)</span>
-        <input class="field-input" id="door-email" type="email" placeholder="Email address…" style="margin-bottom:8px;">
-        <div class="check-row" id="chk-stopby" onclick="this.classList.toggle('checked')" style="margin-bottom:0;">
-          <div class="check-box">✓</div>
-          <div class="check-label" style="font-size:12px;">🚶 Cassie to stop by personally</div>
-        </div>
-      </div>
-      <div class="check-row" id="chk-sign" onclick="this.classList.toggle('checked')"><div class="check-box">✓</div><div class="check-label">🪧 Wants Yard Sign</div></div>
-      <div class="check-row" id="chk-revisit" onclick="this.classList.toggle('checked')"><div class="check-box">✓</div><div class="check-label">🔄 Visit Again</div></div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;font-weight:600;color:var(--muted);align-items:center;">
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#27ae60;margin-right:4px;"></span>Accepted</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#64748b;margin-right:4px;"></span>Not Home</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#c0392b;margin-right:4px;"></span>Refused</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#92400e;margin-right:4px;"></span>No Soliciting</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#e0ddd3;border:1px solid #aaa;margin-right:4px;"></span>Not Knocked</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#D4A832;margin-right:4px;"></span>Upcoming</span>
+      <span style="color:#D4A832;">* = Cassie to Contact</span>
     </div>
 
-    <span class="field-label">Notes</span>
-    <textarea class="field-input" id="door-notes" rows="2" placeholder="Any notes…" style="resize:none;"></textarea>
+    <div id="field-map" style="height:calc(100vh - 36px - 220px);min-height:400px;border-radius:10px;border:1px solid var(--border);"></div>
 
-    <div style="display:flex;gap:10px;margin-top:4px;">
-      <button class="door-save-btn" onclick="saveDoor()">Save</button>
-      <button class="door-cancel-btn" onclick="closeOverlay('door-overlay')">Cancel</button>
-    </div>
-  </div>
+  </main>
 </div>
 
-
-<div class="overlay" id="sign-overlay" onclick="bgClose(event,'sign-overlay')">
-  <div class="sheet green-top">
-    <div class="handle"></div>
-    <div class="sheet-title" style="color:var(--green);">Log Yard Sign</div>
-    <div class="sheet-sub" id="sign-coords">Tap map to place</div>
-    <span class="field-label">Address / Location</span>
-    <input class="field-input" id="sign-addr" type="text" placeholder="e.g. 2440 Dunlap Street North">
-    <span class="field-label">Notes (optional)</span>
-    <input class="field-input" id="sign-notes" type="text" placeholder="Corner lot, by mailbox…">
-    <div class="sheet-actions">
-      <button class="btn btn-outline" onclick="closeOverlay('sign-overlay')">Cancel</button>
-      <button class="btn btn-green" onclick="saveSign()">Save Sign</button>
-    </div>
-  </div>
-</div>
-
-
-<div id="toast"></div>
+<div id="toast" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--black);border:1px solid var(--gold);color:#fff;font-size:13px;font-weight:600;padding:9px 20px;border-radius:20px;z-index:5000;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;"></div>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" crossorigin="anonymous"></script>
@@ -198,17 +89,223 @@
 <script src="/field-app/js/firebase.js"></script>
 <script src="/field-app/js/auth.js"></script>
 <script src="/field-app/js/data.js"></script>
-<script src="/field-app/js/app.js"></script>
 <script>
-  initAuth(
-    function(user) {
-      // Admins can also canvass
-      if (typeof initFirebaseCanvasser === 'function') initFirebaseCanvasser();
-    },
-    function(user) {
-      if (typeof initFirebaseCanvasser === 'function') initFirebaseCanvasser();
+var fieldMap = null;
+var allLogs = {};
+var allAssigned = {};
+var upcomingAssigned = {};
+var canvassDays = {};
+var roster = {};
+var activeDate = 'all';
+var showFilters = {completed:true,'not-knocked':true,upcoming:true,nosolic:true,contact:true};
+var mapMarkers = {};
+var today = new Date().toISOString().slice(0,10);
+
+var RESULT_COLORS = {
+  'Not Home':'#64748b','Vacant':'#94a3b8','For Sale':'#7c3aed',
+  'No Soliciting':'#92400e','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb'
+};
+
+initAuth(
+  function(user) { loadFieldData(); },
+  function(user) { window.location.href = '/field-app/canvass.html'; }
+);
+
+function loadFieldData() {
+  setFbBase();
+  Promise.all([
+    fbGet('/roster'),
+    fbGet('/canvass-days')
+  ].concat((window.NEIGHBORHOODS||[]).map(function(n){
+    return Promise.all([fbGet('/'+n.key+'/logs'), fbGet('/'+n.key+'/assignments')])
+      .then(function(r){ return {key:n.key, logs:r[0], assignments:r[1]}; });
+  }))).then(function(results) {
+    roster = results[0] || {};
+    canvassDays = results[1] || {};
+    var hoodResults = results.slice(2);
+
+    var dates = Object.keys(canvassDays).sort().reverse();
+    var sel = document.getElementById('date-select');
+    if (sel) {
+      dates.forEach(function(d) {
+        var o = document.createElement('option');
+        o.value = d; o.textContent = formatDate(d);
+        sel.appendChild(o);
+      });
     }
-  );
+
+    hoodResults.forEach(function(hood) {
+      var logs = hood.logs || {};
+      var assigns = hood.assignments || {};
+      Object.entries(logs).forEach(function(datePair) {
+        var date = datePair[0], volLogs = datePair[1];
+        if (!volLogs) return;
+        Object.values(volLogs).forEach(function(addrLogs) {
+          if (!addrLogs) return;
+          Object.entries(addrLogs).forEach(function(pair) {
+            var addrId = pair[0], log = pair[1];
+            if (!allLogs[addrId] || (log.time||'') > (allLogs[addrId].time||'')) {
+              allLogs[addrId] = Object.assign({}, log, {date:date});
+            }
+          });
+        });
+      });
+      Object.entries(assigns).forEach(function(datePair) {
+        var date = datePair[0], volAssigns = datePair[1];
+        if (!volAssigns) return;
+        Object.values(volAssigns).forEach(function(assignment) {
+          if (!assignment || !assignment.assignments) return;
+          Object.keys(assignment.assignments).forEach(function(addrId) {
+            allAssigned[addrId] = {date:date};
+            if (date >= today) upcomingAssigned[addrId] = date;
+          });
+        });
+      });
+    });
+
+    document.getElementById('field-sub').textContent =
+      Object.keys(allLogs).length + ' doors logged across all shifts';
+    initFieldMap();
+  }).catch(function(e) {
+    document.getElementById('field-sub').textContent = 'Error: ' + e.message;
+  });
+}
+
+function initFieldMap() {
+  fieldMap = L.map('field-map').setView([45.017,-93.153], 14);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 20
+  }).addTo(fieldMap);
+  var allAddrs = [];
+  (window.NEIGHBORHOODS||[]).forEach(function(n) {
+    allAddrs = allAddrs.concat(window.NEIGHBORHOOD_DATA[n.key]||[]);
+  });
+  if (allAddrs.length) {
+    var lats = allAddrs.map(function(a){ return a.lat; });
+    var lngs = allAddrs.map(function(a){ return a.lng; });
+    fieldMap.fitBounds([
+      [Math.min.apply(null,lats),Math.min.apply(null,lngs)],
+      [Math.max.apply(null,lats),Math.max.apply(null,lngs)]
+    ], {padding:[20,20]});
+  }
+  refreshFieldMarkers();
+}
+
+function setDateFilter(date) {
+  activeDate = date;
+  refreshFieldMarkers();
+}
+
+function toggleShow(key) {
+  showFilters[key] = !showFilters[key];
+  var el = document.querySelector('[data-show="'+key+'"]');
+  if (el) el.classList.toggle('active', showFilters[key]);
+  refreshFieldMarkers();
+}
+
+function refreshFieldMarkers() {
+  if (!fieldMap) return;
+  Object.values(mapMarkers).forEach(function(m){ fieldMap.removeLayer(m); });
+  mapMarkers = {};
+  (window.NEIGHBORHOODS||[]).forEach(function(n) {
+    (window.NEIGHBORHOOD_DATA[n.key]||[]).forEach(function(addr) {
+      var log = allLogs[addr.id];
+      var isLogged = !!log;
+      var isUpcoming = !!upcomingAssigned[addr.id];
+      var isNoSolic = log && log.contact === 'No Soliciting';
+      var isContact = log && log.wantContact;
+      if (activeDate !== 'all' && isLogged && log.date !== activeDate) return;
+      if (isLogged && isNoSolic && !showFilters.nosolic) return;
+      if (isLogged && !isNoSolic && !showFilters.completed) return;
+      if (!isLogged && isUpcoming && !showFilters.upcoming) return;
+      if (!isLogged && !isUpcoming && !showFilters['not-knocked']) return;
+      var color, size, opacity;
+      if (isLogged) { color=RESULT_COLORS[log.contact]||'#888'; size=10; opacity=1; }
+      else if (isUpcoming) { color='#D4A832'; size=8; opacity=.7; }
+      else { color='#e0ddd3'; size=7; opacity=.5; }
+      var star = isContact ? '<span style="position:absolute;top:-6px;right:-4px;font-size:9px;color:#D4A832;">*</span>' : '';
+      var html = '<div style="position:relative;width:'+size+'px;height:'+size+'px;background:'+color+
+        ';border-radius:50%;border:1.5px solid rgba(0,0,0,.15);opacity:'+opacity+
+        ';box-shadow:0 1px 3px rgba(0,0,0,.2);">'+star+'</div>';
+      var icon = L.divIcon({className:'', html:html, iconSize:[size,size], iconAnchor:[size/2,size/2]});
+      var popup = addr.n+' '+addr.s+(addr.u?' - '+addr.u:'');
+      if (isLogged) {
+        popup += '<br><strong>'+log.contact+'</strong>';
+        if (log.name) popup += ' - '+log.name;
+        if (log.phone) popup += ' - '+log.phone;
+        if (log.wantSign) popup += '<br>Wants Yard Sign';
+        if (log.wantContact) popup += '<br>Cassie to Contact';
+      } else if (isUpcoming) {
+        popup += '<br><em>Upcoming: '+formatDate(upcomingAssigned[addr.id])+'</em>';
+      } else {
+        popup += '<br><em>Not yet canvassed</em>';
+      }
+      var marker = L.marker([addr.lat,addr.lng],{icon:icon}).bindPopup(popup).addTo(fieldMap);
+      mapMarkers[addr.id] = marker;
+    });
+  });
+}
+
+function exportList(type) {
+  var rows = [], header;
+  if (type === 'contact') {
+    header = 'First Name,Last Name,Phone,Email,Address,Date,Notes';
+    Object.entries(allLogs).forEach(function(pair) {
+      var addrId=pair[0], log=pair[1];
+      if (!log.wantContact) return;
+      if (activeDate !== 'all' && log.date !== activeDate) return;
+      var addr = findAddr(addrId);
+      rows.push([log.name||'',log.lastname||'',log.phone||'',log.email||'',
+        addr?addr.n+' '+addr.s+(addr.u?' '+addr.u:''):'',log.date||'',log.notes||''].map(csvCell).join(','));
+    });
+  } else if (type === 'signs') {
+    header = 'Address,Unit,Street,First Name,Last Name,Phone,Date';
+    Object.entries(allLogs).forEach(function(pair) {
+      var addrId=pair[0], log=pair[1];
+      if (!log.wantSign) return;
+      if (activeDate !== 'all' && log.date !== activeDate) return;
+      var addr = findAddr(addrId);
+      rows.push([addr?addr.n:'',addr?addr.u||'':'',addr?addr.s:'',
+        log.name||'',log.lastname||'',log.phone||'',log.date||''].map(csvCell).join(','));
+    });
+  } else if (type === 'nosolic') {
+    header = 'Address,Unit,Street,Date';
+    Object.entries(allLogs).forEach(function(pair) {
+      var addrId=pair[0], log=pair[1];
+      if (log.contact !== 'No Soliciting') return;
+      if (activeDate !== 'all' && log.date !== activeDate) return;
+      var addr = findAddr(addrId);
+      rows.push([addr?addr.n:'',addr?addr.u||'':'',addr?addr.s:'',log.date||''].map(csvCell).join(','));
+    });
+  }
+  if (!rows.length) { showToast('No data to export'); return; }
+  var csv = header + '\n' + rows.join('\n');
+  var blob = new Blob([csv],{type:'text/csv'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href=url; a.download='c4r-'+type+'-'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},5000);
+  showToast('Downloaded '+rows.length+' rows');
+}
+
+function findAddr(id) {
+  var found = null;
+  (window.NEIGHBORHOODS||[]).forEach(function(n){
+    (window.NEIGHBORHOOD_DATA[n.key]||[]).forEach(function(a){ if(a.id===id) found=a; });
+  });
+  return found;
+}
+
+function csvCell(v){ return '"'+(v||'').toString().replace(/"/g,'""')+'"'; }
+
+var _tt;
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.style.opacity='1';
+  clearTimeout(_tt);
+  _tt=setTimeout(function(){t.style.opacity='0';},2500);
+}
 </script>
 </body>
 </html>
