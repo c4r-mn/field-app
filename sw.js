@@ -1,5 +1,5 @@
 // Cassie for Roseville — Field App Service Worker
-var CACHE = 'c4r-v4';
+var CACHE = 'c4r-v5';
 var STATIC = [
   '/field-app/',
   '/field-app/index.html',
