@@ -422,3 +422,13 @@ body{padding-top:36px;} /* account for user bar */
 @media(min-width:769px){
   .mobile-nav{display:none;}
 }
+
+/* Door drawer save/cancel buttons */
+.door-save-btn{flex:1;padding:13px;border:none;border-radius:10px;background:var(--gold);
+  color:var(--black);font-family:'Outfit',sans-serif;font-size:15px;font-weight:800;cursor:pointer;
+  transition:opacity .15s;}
+.door-save-btn:hover{opacity:.88;}
+.door-cancel-btn{flex:1;padding:13px;border:2px solid var(--border);border-radius:10px;
+  background:var(--white);color:var(--muted);font-family:'Outfit',sans-serif;font-size:14px;
+  font-weight:700;cursor:pointer;transition:all .15s;}
+.door-cancel-btn:hover{border-color:var(--gold);color:var(--text);}
