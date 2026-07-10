@@ -105,6 +105,22 @@ var RESULT_COLORS = {
   'Not Home':'#64748b','Vacant':'#94a3b8','For Sale':'#7c3aed',
   'No Soliciting':'#92400e','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb'
 };
+var CONTACT_OPTIONS = ['Not Home','Vacant','For Sale','No Soliciting','Refused','Accepted','Other Language'];
+
+function saveFieldEdit(addrId) {
+  var sel = document.querySelector('.fv-edit-result[data-addr-id="'+addrId+'"]');
+  if (!sel) return;
+  var log = allLogs[addrId];
+  if (!log || !log.volId || !log.hoodKey || !log.date) { showToast('Cannot edit this entry'); return; }
+  var newContact = sel.value;
+  var updated = Object.assign({}, log, {contact:newContact});
+  var path = '/'+log.hoodKey+'/logs/'+log.date+'/'+log.volId+'/'+addrId;
+  fbPut(path, updated).then(function(){
+    allLogs[addrId] = updated;
+    showToast('Updated to '+newContact);
+    refreshFieldMarkers();
+  }).catch(function(){ showToast('Save failed'); });
+}
 
 initAuth(
   function(user) { loadFieldData(); },
@@ -140,12 +156,13 @@ function loadFieldData() {
       Object.entries(logs).forEach(function(datePair) {
         var date = datePair[0], volLogs = datePair[1];
         if (!volLogs) return;
-        Object.values(volLogs).forEach(function(addrLogs) {
+        Object.entries(volLogs).forEach(function(volPair) {
+          var volId = volPair[0], addrLogs = volPair[1];
           if (!addrLogs) return;
           Object.entries(addrLogs).forEach(function(pair) {
             var addrId = pair[0], log = pair[1];
             if (!allLogs[addrId] || (log.time||'') > (allLogs[addrId].time||'')) {
-              allLogs[addrId] = Object.assign({}, log, {date:date});
+              allLogs[addrId] = Object.assign({}, log, {date:date, volId:volId, hoodKey:hood.key});
             }
           });
         });
@@ -228,18 +245,27 @@ function refreshFieldMarkers() {
         ';border-radius:50%;border:1.5px solid rgba(0,0,0,.15);opacity:'+opacity+
         ';box-shadow:0 1px 3px rgba(0,0,0,.2);">'+star+'</div>';
       var icon = L.divIcon({className:'', html:html, iconSize:[size,size], iconAnchor:[size/2,size/2]});
-      var popup = addr.n+' '+addr.s+(addr.u?' - '+addr.u:'');
+      var popup = '<div style="min-width:200px;">';
+      popup += '<strong>'+addr.n+' '+addr.s+(addr.u?' - '+addr.u:'')+'</strong>';
       if (isLogged) {
-        popup += '<br><strong>'+log.contact+'</strong>';
-        if (log.name) popup += ' - '+log.name;
-        if (log.phone) popup += ' - '+log.phone;
-        if (log.wantSign) popup += '<br>Wants Yard Sign';
-        if (log.wantContact) popup += '<br>Cassie to Contact';
+        popup += '<div style="margin-top:4px;">';
+        if (log.name) popup += log.name+(log.phone?' - '+log.phone:'')+'<br>';
+        if (log.wantSign) popup += 'Wants Yard Sign<br>';
+        if (log.wantContact) popup += 'Cassie to Contact<br>';
+        if (log.notes) popup += '<em>'+log.notes+'</em><br>';
+        popup += '</div>';
+        popup += '<div style="margin-top:6px;">'
+          +'<select class="fv-edit-result" data-addr-id="'+addr.id+'" style="font-size:11px;padding:3px 6px;width:100%;margin-bottom:4px;border:1px solid #ccc;border-radius:5px;">'
+            +CONTACT_OPTIONS.map(function(c){return '<option value="'+c+'"'+(c===log.contact?' selected':'')+'>'+c+'</option>';}).join('')
+          +'</select>'
+          +'<button onclick="saveFieldEdit(\''+addr.id+'\')" style="font-size:11px;font-weight:700;padding:4px 10px;background:#D4A832;border:none;border-radius:5px;cursor:pointer;width:100%;">Save Change</button>'
+        +'</div>';
       } else if (isUpcoming) {
         popup += '<br><em>Upcoming: '+formatDate(upcomingAssigned[addr.id])+'</em>';
       } else {
         popup += '<br><em>Not yet canvassed</em>';
       }
+      popup += '</div>';
       var marker = L.marker([addr.lat,addr.lng],{icon:icon}).bindPopup(popup).addTo(fieldMap);
       mapMarkers[addr.id] = marker;
     });
