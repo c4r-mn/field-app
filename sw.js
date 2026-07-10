@@ -1,15 +1,9 @@
 // Cassie for Roseville — Field App Service Worker
-var CACHE = 'c4r-v5';
+var CACHE = 'c4r-v6';
+
+// Only precache truly static assets — HTML is always network-first below,
+// so precaching it here just adds a fragile install-time dependency.
 var STATIC = [
-  '/field-app/',
-  '/field-app/index.html',
-  '/field-app/canvass.html',
-  '/field-app/admin/',
-  '/field-app/admin/index.html',
-  '/field-app/admin/shifts.html',
-  '/field-app/admin/shift.html',
-  '/field-app/admin/roster.html',
-  '/field-app/admin/field.html',
   '/field-app/css/app.css',
   '/field-app/js/app.js',
   '/field-app/js/auth.js',
@@ -19,7 +13,12 @@ var STATIC = [
 
 self.addEventListener('install', function(e) {
   e.waitUntil(
-    caches.open(CACHE).then(function(c) { return c.addAll(STATIC); })
+    caches.open(CACHE).then(function(c) {
+      return c.addAll(STATIC).catch(function(err) {
+        // Don't let one failed asset kill the whole install
+        console.warn('SW precache warning:', err);
+      });
+    })
   );
   self.skipWaiting();
 });
@@ -34,39 +33,37 @@ self.addEventListener('activate', function(e) {
 });
 
 self.addEventListener('fetch', function(e) {
-  // Only handle http/https requests
   if (!e.request.url.startsWith('http')) return;
-  // Never cache Firebase, Google, or config
   if (e.request.url.indexOf('firebase') !== -1 ||
       e.request.url.indexOf('google') !== -1 ||
       e.request.url.indexOf('config.json') !== -1) {
     return;
   }
-  // HTML files: network-first so updates are always picked up
-  var isHtml = e.request.url.endsWith('.html') || e.request.url.endsWith('/');
+
+  var isHtml = e.request.mode === 'navigate' ||
+    e.request.url.endsWith('.html') || e.request.url.endsWith('/');
+
   if (isHtml) {
+    // Always go to network for HTML — never serve stale pages
     e.respondWith(
-      fetch(e.request).then(function(resp) {
-        var clone = resp.clone();
-        caches.open(CACHE).then(function(c){ c.put(e.request, clone); });
-        return resp;
-      }).catch(function() {
-        return caches.match(e.request);
+      fetch(e.request).catch(function() {
+        return caches.match(e.request).then(function(r) {
+          return r || caches.match('/field-app/');
+        });
       })
     );
     return;
   }
-  // JS/CSS: cache-first but update in background
+
+  // JS/CSS: cache-first, refresh in background
   e.respondWith(
     caches.match(e.request).then(function(cached) {
       var fetchPromise = fetch(e.request).then(function(resp) {
         var clone = resp.clone();
         caches.open(CACHE).then(function(c){ c.put(e.request, clone); });
         return resp;
-      });
+      }).catch(function(){ return cached; });
       return cached || fetchPromise;
-    }).catch(function() {
-      return caches.match('/field-app/');
     })
   );
 });
