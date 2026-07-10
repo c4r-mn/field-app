@@ -173,7 +173,7 @@ function saveNewShift() {
   fbPut('/canvass-days/'+date, shiftObj).then(function() {
     showToast('Shift created — opening route planner...');
     setTimeout(function(){
-      window.location.href = '/field-app/admin/shift.html?date='+date;
+      window.location.href = '/field-app/admin/shift.html?date=' + encodeURIComponent(date);
     }, 500);
   }).catch(function(){ showToast('Save failed'); });
 }
