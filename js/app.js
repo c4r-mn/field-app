@@ -1611,7 +1611,17 @@ function updateStats(){
   var arr=Object.values(logs);
   var counts={}; Object.keys(CONTACT_COLORS).forEach(function(k){counts[k]=0;});
   arr.forEach(function(l){if(counts[l.contact]!==undefined)counts[l.contact]++;});
-  el.innerHTML='<div class="stat-grid"><div class="stat-card"><div class="stat-n">'+arr.length+'</div><div class="stat-l">Logged</div></div><div class="stat-card"><div class="stat-n" style="color:#27ae60;">'+arr.filter(function(l){return l.interest>=4;}).length+'</div><div class="stat-l">4\u20135 Interest</div></div><div class="stat-card"><div class="stat-n" style="color:var(--gold-acc);">'+signs.length+'</div><div class="stat-l">Signs</div></div></div><div class="stat-grid">'+Object.entries(counts).map(function(e){return '<div class="stat-card"><div class="stat-n" style="font-size:16px;color:'+(CONTACT_COLORS[e[0]]||'#888')+';">'+e[1]+'</div><div class="stat-l" style="font-size:8px;">'+e[0]+'</div></div>';}).join('')+'</div><div class="stat-grid"><div class="stat-card"><div class="stat-n" style="color:#27ae60;">'+arr.filter(function(l){return l.wantContact;}).length+'</div><div class="stat-l">Want Contact</div></div><div class="stat-card"><div class="stat-n" style="color:var(--gold-acc);">'+arr.filter(function(l){return l.wantSign;}).length+'</div><div class="stat-l">Want Sign</div></div><div class="stat-card"><div class="stat-n">'+arr.filter(function(l){return l.litdrop;}).length+'</div><div class="stat-l">Lit Drop</div></div></div>';
+
+  el.innerHTML =
+    '<div class="stat-grid"><div class="stat-card"><div class="stat-n">'+arr.length+'</div><div class="stat-l">Logged</div></div></div>'
+    +'<div class="stat-grid">'+Object.entries(counts).map(function(e){
+      return '<div class="stat-card"><div class="stat-n" style="font-size:16px;color:'+(CONTACT_COLORS[e[0]]||'#888')+';">'+e[1]+'</div><div class="stat-l" style="font-size:8px;">'+e[0]+'</div></div>';
+    }).join('')+'</div>'
+    +'<div class="stat-grid">'
+      +'<div class="stat-card"><div class="stat-n" style="color:var(--gold-acc);">'+arr.filter(function(l){return l.wantContact;}).length+'</div><div class="stat-l">Cassie to Contact</div></div>'
+      +'<div class="stat-card"><div class="stat-n" style="color:var(--gold-acc);">'+arr.filter(function(l){return l.wantSign;}).length+'</div><div class="stat-l">Yard Sign</div></div>'
+      +'<div class="stat-card"><div class="stat-n">'+arr.filter(function(l){return l.litLeft||l.cardLeft;}).length+'</div><div class="stat-l">Lit Left</div></div>'
+    +'</div>';
 }
 
 function buildCSV(){
