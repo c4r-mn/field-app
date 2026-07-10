@@ -15,7 +15,6 @@ var _authReady = false;
 var _currentUser = null;
 
 // ── STUBS (replaced once Firebase loads) ─────────────────────────────────────
-window.doGoogleLogin = function() { showAuthMsg('Loading… please wait'); };
 window.doEmailLogin = function() { showAuthMsg('Loading… please wait'); };
 window.doSignOut = function() {
   Object.keys(localStorage).forEach(function(k) {
@@ -69,28 +68,6 @@ function startFirebase(onAdmin, onCanvasser) {
   _authReady = true;
 
   var auth = firebase.auth();
-  var googleProvider = new firebase.auth.GoogleAuthProvider();
-
-  // Real implementations
-  var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-  window.doGoogleLogin = function() {
-    showAuthMsg('');
-    if (isMobile) {
-      auth.signInWithRedirect(googleProvider).catch(function(e) {
-        showAuthMsg(friendlyError(e.code), true);
-      });
-    } else {
-      auth.signInWithPopup(googleProvider).catch(function(e) {
-        if (e.code !== 'auth/popup-closed-by-user') showAuthMsg(friendlyError(e.code), true);
-      });
-    }
-  };
-
-  // Handle redirect result on page load (for mobile)
-  auth.getRedirectResult().catch(function(e) {
-    if (e.code && e.code !== 'auth/null-user') showAuthMsg(friendlyError(e.code), true);
-  });
 
   window.doEmailLogin = function() {
     var email = (document.getElementById('auth-email') || {}).value || '';
