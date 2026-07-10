@@ -107,17 +107,67 @@ var RESULT_COLORS = {
 };
 var CONTACT_OPTIONS = ['Not Home','Vacant','For Sale','No Soliciting','Refused','Accepted','Other Language'];
 
-function saveFieldEdit(addrId) {
-  var sel = document.querySelector('.fv-edit-result[data-addr-id="'+addrId+'"]');
-  if (!sel) return;
+var fvEditAddrId = null;
+
+function openFvEdit(addrId) {
   var log = allLogs[addrId];
+  if (!log) return;
+  fvEditAddrId = addrId;
+  var addr = findAddr(addrId);
+  document.getElementById('fv-edit-title').textContent = addr ? (addr.n+' '+addr.s+(addr.u?' - '+addr.u:'')) : 'Edit Result';
+
+  // Build contact result buttons
+  var grid = document.getElementById('fv-contact-grid');
+  grid.innerHTML = CONTACT_OPTIONS.map(function(c){
+    return '<div class="contact-btn'+(c===log.contact?' active':'')+'" data-r="'+c+'" onclick="fvSelContact(this)">'+c+'</div>';
+  }).join('');
+
+  // Pre-fill fields
+  document.getElementById('fv-chk-lit').classList.toggle('checked', !!(log.litLeft||log.cardLeft));
+  var contactChecked = !!log.wantContact;
+  document.getElementById('fv-chk-contact').classList.toggle('checked', contactChecked);
+  document.getElementById('fv-contact-fields').style.display = contactChecked ? 'block' : 'none';
+  document.getElementById('fv-name').value = log.name||'';
+  document.getElementById('fv-phone').value = log.phone||'';
+  document.getElementById('fv-chk-sign').classList.toggle('checked', !!log.wantSign);
+  document.getElementById('fv-notes').value = log.notes||'';
+
+  document.getElementById('fv-edit-overlay').classList.add('open');
+}
+
+function fvSelContact(el) {
+  document.querySelectorAll('#fv-contact-grid .contact-btn').forEach(function(b){b.classList.remove('active');});
+  el.classList.add('active');
+}
+
+function closeFvEdit() {
+  document.getElementById('fv-edit-overlay').classList.remove('open');
+  fvEditAddrId = null;
+}
+
+function saveFvEdit() {
+  if (!fvEditAddrId) return;
+  var log = allLogs[fvEditAddrId];
   if (!log || !log.volId || !log.hoodKey || !log.date) { showToast('Cannot edit this entry'); return; }
-  var newContact = sel.value;
-  var updated = Object.assign({}, log, {contact:newContact});
-  var path = '/'+log.hoodKey+'/logs/'+log.date+'/'+log.volId+'/'+addrId;
+
+  var activeBtn = document.querySelector('#fv-contact-grid .contact-btn.active');
+  if (!activeBtn) { showToast('Select a contact result'); return; }
+
+  var updated = Object.assign({}, log, {
+    contact: activeBtn.dataset.r,
+    litLeft: document.getElementById('fv-chk-lit').classList.contains('checked'),
+    wantContact: document.getElementById('fv-chk-contact').classList.contains('checked'),
+    name: document.getElementById('fv-name').value.trim(),
+    phone: document.getElementById('fv-phone').value.trim(),
+    wantSign: document.getElementById('fv-chk-sign').classList.contains('checked'),
+    notes: document.getElementById('fv-notes').value.trim(),
+  });
+
+  var path = '/'+log.hoodKey+'/logs/'+log.date+'/'+log.volId+'/'+fvEditAddrId;
   fbPut(path, updated).then(function(){
-    allLogs[addrId] = updated;
-    showToast('Updated to '+newContact);
+    allLogs[fvEditAddrId] = updated;
+    showToast('Saved');
+    closeFvEdit();
     refreshFieldMarkers();
   }).catch(function(){ showToast('Save failed'); });
 }
@@ -245,21 +295,17 @@ function refreshFieldMarkers() {
         ';border-radius:50%;border:1.5px solid rgba(0,0,0,.15);opacity:'+opacity+
         ';box-shadow:0 1px 3px rgba(0,0,0,.2);">'+star+'</div>';
       var icon = L.divIcon({className:'', html:html, iconSize:[size,size], iconAnchor:[size/2,size/2]});
-      var popup = '<div style="min-width:200px;">';
+      var popup = '<div style="min-width:190px;">';
       popup += '<strong>'+addr.n+' '+addr.s+(addr.u?' - '+addr.u:'')+'</strong>';
       if (isLogged) {
         popup += '<div style="margin-top:4px;">';
+        popup += '<strong style="color:'+color+';">'+log.contact+'</strong><br>';
         if (log.name) popup += log.name+(log.phone?' - '+log.phone:'')+'<br>';
         if (log.wantSign) popup += 'Wants Yard Sign<br>';
         if (log.wantContact) popup += 'Cassie to Contact<br>';
         if (log.notes) popup += '<em>'+log.notes+'</em><br>';
         popup += '</div>';
-        popup += '<div style="margin-top:6px;">'
-          +'<select class="fv-edit-result" data-addr-id="'+addr.id+'" style="font-size:11px;padding:3px 6px;width:100%;margin-bottom:4px;border:1px solid #ccc;border-radius:5px;">'
-            +CONTACT_OPTIONS.map(function(c){return '<option value="'+c+'"'+(c===log.contact?' selected':'')+'>'+c+'</option>';}).join('')
-          +'</select>'
-          +'<button onclick="saveFieldEdit(\''+addr.id+'\')" style="font-size:11px;font-weight:700;padding:4px 10px;background:#D4A832;border:none;border-radius:5px;cursor:pointer;width:100%;">Save Change</button>'
-        +'</div>';
+        popup += '<button onclick="openFvEdit(\''+addr.id+'\')" style="margin-top:6px;font-size:11px;font-weight:700;padding:5px 12px;background:#D4A832;border:none;border-radius:5px;cursor:pointer;width:100%;">Edit</button>';
       } else if (isUpcoming) {
         popup += '<br><em>Upcoming: '+formatDate(upcomingAssigned[addr.id])+'</em>';
       } else {
@@ -333,5 +379,43 @@ function showToast(msg){
   _tt=setTimeout(function(){t.style.opacity='0';},2500);
 }
 </script>
+
+<style>
+.fv-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:6000;display:none;align-items:flex-end;justify-content:center;}
+.fv-overlay.open{display:flex;}
+.fv-sheet{background:var(--white);border-top:3px solid var(--gold);border-radius:16px 16px 0 0;padding:18px 18px 28px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;}
+.fv-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 14px;}
+.fv-title{font-size:16px;font-weight:800;margin-bottom:10px;}
+</style>
+
+<div class="fv-overlay" id="fv-edit-overlay" onclick="if(event.target===this) closeFvEdit()">
+  <div class="fv-sheet">
+    <div class="fv-handle"></div>
+    <div class="fv-title" id="fv-edit-title">Edit Result</div>
+
+    <span class="field-label">Contact Result</span>
+    <div class="contact-grid" id="fv-contact-grid"></div>
+
+    <div class="checks">
+      <div class="check-row" id="fv-chk-lit" onclick="this.classList.toggle('checked')"><div class="check-box">✓</div><div class="check-label">📄 Literature Left</div></div>
+      <div class="check-row" id="fv-chk-contact" onclick="this.classList.toggle('checked');document.getElementById('fv-contact-fields').style.display=this.classList.contains('checked')?'block':'none';"><div class="check-box">✓</div><div class="check-label">📞 Cassie to Contact</div></div>
+      <div id="fv-contact-fields" style="display:none;background:var(--light);border-radius:8px;padding:10px 12px;margin-bottom:8px;">
+        <span class="field-label">First Name</span>
+        <input class="field-input" id="fv-name" type="text" placeholder="First name…" style="margin-bottom:8px;">
+        <span class="field-label">Phone</span>
+        <input class="field-input" id="fv-phone" type="tel" placeholder="Phone number…" style="margin-bottom:8px;">
+      </div>
+      <div class="check-row" id="fv-chk-sign" onclick="this.classList.toggle('checked')"><div class="check-box">✓</div><div class="check-label">🪧 Wants Yard Sign</div></div>
+    </div>
+
+    <span class="field-label">Notes</span>
+    <textarea class="field-input" id="fv-notes" rows="2" placeholder="Any notes…" style="resize:none;"></textarea>
+
+    <div style="display:flex;gap:10px;margin-top:12px;">
+      <button class="door-save-btn" onclick="saveFvEdit()">Save</button>
+      <button class="door-cancel-btn" onclick="closeFvEdit()">Cancel</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
