@@ -175,3 +175,23 @@ function friendlyError(code) {
   };
   return map[code] || 'Sign-in failed — try again.';
 }
+
+function deleteDay(date) {
+  if (!confirm('Delete shift for ' + formatDate(date) + '? Assignments and logs are kept.')) return;
+  delete canvassDays[date];
+  fbPut('/canvass-days/' + date, null).then(function() {
+    renderDaysList();
+    buildAssignDaySelect();
+    showToast('Shift deleted');
+  }).catch(function() { showToast('Delete failed'); });
+}
+
+function formatDate(dateStr) {
+  var d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+}
+
+// ── BOOT ──────────────────────────────────
+// Boot handled by js/auth.js
+
+
