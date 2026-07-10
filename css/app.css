@@ -1,11 +1,13 @@
 /* Cassie for Roseville — Field App Styles */
 
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
+
 :root{
-  --cream:#FAF8EC;--white:#fff;--black:#1d1b16;
+  --cream:#F5F0E8;--white:#fff;--black:#1A1A1A;
   --gold:#D4A832;--gold-acc:#9A7215;
   --border:#e0ddd3;--light:#f0ede4;--mid:#d8d4c8;
-  --text:#1d1b16;--muted:#6b6860;--subtle:#a8a49a;
-  --red:#c0392b;--green:#27ae60;
+  --text:#1A1A1A;--muted:#6b6860;--subtle:#a8a49a;
+  --red:#BF1E2E;--green:#27ae60;
   --prop-house:#27ae60;--prop-senior:#d97706;
   --prop-apartment:#2563eb;--prop-mobile:#7c3aed;
 }
