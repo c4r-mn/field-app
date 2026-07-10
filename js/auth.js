@@ -119,7 +119,12 @@ function startFirebase(onAdmin, onCanvasser) {
     }
 
     var email = user.email || '';
-    var isAdmin = ADMIN_EMAILS.indexOf(email) !== -1;
+    if (!email) {
+      auth.signOut();
+      window.location.href = '/field-app/?denied=1&email=(no+email+returned+by+Google)';
+      return;
+    }
+    var isAdmin = ADMIN_EMAILS.map(function(e){return (e||'').toLowerCase();}).indexOf(email.toLowerCase()) !== -1;
     _currentUser = { uid: user.uid, email: email, displayName: user.displayName || email.split('@')[0], isAdmin: isAdmin };
     window.currentUser = _currentUser;
 
@@ -135,7 +140,7 @@ function startFirebase(onAdmin, onCanvasser) {
         }
         if (!found) {
           auth.signOut();
-          window.location.href = '/field-app/?denied=1';
+          window.location.href = '/field-app/?denied=1&email='+encodeURIComponent(email);
           return;
         }
         if (typeof onCanvasser === 'function') onCanvasser(_currentUser);
