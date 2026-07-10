@@ -6,7 +6,7 @@
   <title>Dashboard — Cassie for Roseville Field App</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../css/app.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
 </head>
 <body>
 
@@ -88,7 +88,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
 <script src="/field-app/js/firebase.js"></script>
 <script src="/field-app/js/auth.js"></script>
 <script src="/field-app/js/data.js"></script>
@@ -195,22 +195,47 @@ function initDashMap() {
     'No Soliciting':'#92400e','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb'};
 
   (window.NEIGHBORHOODS||[]).forEach(function(n) {
-    fbGet('/'+n.key+'/logs/'+today).then(function(dayLogs) {
-      if (!dayLogs) return;
-      Object.values(dayLogs).forEach(function(volLogs) {
-        if (!volLogs) return;
-        Object.entries(volLogs).forEach(function(pair) {
-          var addrId = pair[0], log = pair[1];
-          var addr = (window.NEIGHBORHOOD_DATA[n.key]||[]).find(function(a){return a.id===addrId;});
-          if (!addr) return;
-          var color = COLORS[log.contact] || '#888';
-          var dot = log.wantContact ? '<div style="position:absolute;top:-4px;right:-4px;width:8px;height:8px;background:#D4A832;border-radius:50%;border:1px solid #fff;"></div>' : '';
-          var icon = L.divIcon({className:'',html:'<div style="position:relative;width:12px;height:12px;background:'+color+';border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);">'+dot+'</div>',iconSize:[12,12],iconAnchor:[6,6]});
-          L.marker([addr.lat,addr.lng],{icon:icon})
-           .bindTooltip(addr.n+' '+addr.s+' - '+log.contact)
-           .addTo(dashMap);
+    Promise.all([
+      fbGet('/'+n.key+'/logs/'+today),
+      fbGet('/'+n.key+'/assignments/'+today)
+    ]).then(function(r) {
+      var dayLogs = r[0];
+      var dayAssigns = r[1];
+      var loggedIds = {};
+
+      if (dayLogs) {
+        Object.values(dayLogs).forEach(function(volLogs) {
+          if (!volLogs) return;
+          Object.entries(volLogs).forEach(function(pair) {
+            var addrId = pair[0], log = pair[1];
+            loggedIds[addrId] = true;
+            var addr = (window.NEIGHBORHOOD_DATA[n.key]||[]).find(function(a){return a.id===addrId;});
+            if (!addr) return;
+            var color = COLORS[log.contact] || '#888';
+            var dot = log.wantContact ? '<div style="position:absolute;top:-4px;right:-4px;width:8px;height:8px;background:#D4A832;border-radius:50%;border:1px solid #fff;"></div>' : '';
+            var icon = L.divIcon({className:'',html:'<div style="position:relative;width:12px;height:12px;background:'+color+';border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);">'+dot+'</div>',iconSize:[12,12],iconAnchor:[6,6]});
+            L.marker([addr.lat,addr.lng],{icon:icon})
+             .bindTooltip(addr.n+' '+addr.s+' - '+log.contact)
+             .addTo(dashMap);
+          });
         });
-      });
+      }
+
+      // Show today's assigned-but-not-yet-knocked addresses in gold
+      if (dayAssigns) {
+        Object.values(dayAssigns).forEach(function(assignment) {
+          if (!assignment || !assignment.route) return;
+          assignment.route.forEach(function(addrId) {
+            if (loggedIds[addrId]) return;
+            var addr = (window.NEIGHBORHOOD_DATA[n.key]||[]).find(function(a){return a.id===addrId;});
+            if (!addr) return;
+            var icon = L.divIcon({className:'',html:'<div style="width:10px;height:10px;background:#D4A832;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);opacity:.8;"></div>',iconSize:[10,10],iconAnchor:[5,5]});
+            L.marker([addr.lat,addr.lng],{icon:icon})
+             .bindTooltip(addr.n+' '+addr.s+' - Assigned today, not yet knocked')
+             .addTo(dashMap);
+          });
+        });
+      }
     });
   });
 }

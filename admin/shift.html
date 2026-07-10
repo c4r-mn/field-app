@@ -3,36 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shift — Cassie for Roseville Field App</title>
+  <title>Dashboard — Cassie for Roseville Field App</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../css/app.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <style>
-    .canvasser-tab{padding:8px 16px;font-size:13px;font-weight:700;border:2px solid var(--border);
-      border-radius:8px;cursor:pointer;background:var(--white);color:var(--muted);transition:all .15s;}
-    .canvasser-tab.active{background:var(--gold);color:var(--black);border-color:var(--gold);}
-    .danger-zone{border:2px solid #fee2e2;border-radius:12px;padding:16px;margin-top:24px;}
-    .danger-zone-title{font-size:12px;font-weight:800;color:var(--red);text-transform:uppercase;
-      letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;justify-content:space-between;}
-    .danger-zone-body{display:none;margin-top:14px;}
-    .danger-zone-body.open{display:block;}
-    .addr-log-row{padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;}
-    .addr-log-num{font-weight:800;color:var(--gold-acc);min-width:24px;flex-shrink:0;}
-    .addr-log-addr{font-weight:700;flex:1;min-width:0;}
-    .not-knocked{color:var(--subtle);font-style:italic;}
-    .ck-route-row{display:flex;align-items:center;gap:8px;padding:8px 10px;
-      border-bottom:1px solid #f0ede4;min-height:40px;border-left:3px solid var(--gold);background:#fff;}
-    .ck-unsel-row{display:flex;align-items:center;gap:8px;padding:8px 10px;
-      border-bottom:1px solid #f0ede4;min-height:40px;cursor:pointer;}
-    .ck-unsel-row:hover{background:var(--light);}
-  </style>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
 </head>
 <body>
 
 <div id="user-bar">
   <span id="user-bar-name"></span>
   <div class="user-bar-right">
-    <a href="/field-app/admin/shifts.html" style="color:var(--gold);font-size:11px;font-weight:700;text-decoration:none;margin-right:8px;">← All Shifts</a>
     <button class="signout-btn" onclick="doSignOut()">Sign Out</button>
   </div>
 </div>
@@ -45,617 +25,219 @@
     </div>
     <nav class="admin-nav">
       <div class="admin-nav-section">Overview</div>
-      <a href="/field-app/admin/" class="admin-nav-link"><span class="admin-nav-icon">🗺</span> Dashboard</a>
+      <a href="/field-app/admin/" class="admin-nav-link active"><span class="admin-nav-icon">🗺</span> Dashboard</a>
       <div class="admin-nav-section">Operations</div>
-      <a href="/field-app/admin/shifts.html" class="admin-nav-link active"><span class="admin-nav-icon">📅</span> Shifts</a>
+      <a href="/field-app/admin/shifts.html" class="admin-nav-link"><span class="admin-nav-icon">📅</span> Shifts</a>
       <a href="/field-app/admin/roster.html" class="admin-nav-link"><span class="admin-nav-icon">👥</span> Roster</a>
       <div class="admin-nav-section">Field</div>
       <a href="/field-app/admin/field.html" class="admin-nav-link"><span class="admin-nav-icon">📍</span> Field View</a>
     </nav>
   </aside>
   <div class="mobile-nav">
-    <a href="/field-app/admin/" class="mobile-nav-link">Dashboard</a>
-    <a href="/field-app/admin/shifts.html" class="mobile-nav-link active">Shifts</a>
+    <a href="/field-app/admin/" class="mobile-nav-link active">Dashboard</a>
+    <a href="/field-app/admin/shifts.html" class="mobile-nav-link">Shifts</a>
     <a href="/field-app/admin/roster.html" class="mobile-nav-link">Roster</a>
     <a href="/field-app/admin/field.html" class="mobile-nav-link">Field View</a>
   </div>
   <main class="admin-content">
 
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
-      <div>
-        <div class="admin-page-title" id="shift-title">Loading...</div>
-        <div class="admin-page-sub" id="shift-sub"></div>
-      </div>
-      <button class="btn btn-ghost btn-sm" id="print-btn" onclick="printWalkSheet()" style="display:none;">🖨 Print Walk Sheet</button>
+    <div class="admin-page-header">
+      <div class="admin-page-title">Dashboard</div>
+      <div class="admin-page-sub" id="dash-date"></div>
     </div>
 
-    <!-- Canvasser selector — always visible, works for both assign and results -->
-    <div class="page-card" style="margin-bottom:16px;">
-      <div class="form-row">
-        <div class="form-col">
-          <label class="form-label">Canvasser</label>
-          <select class="form-input" id="canvasser-select" onchange="onCanvasserChange()">
-            <option value="">— Select canvasser —</option>
-          </select>
-        </div>
-        <div class="form-col" id="partner-col">
-          <label class="form-label">Partner (gets same route)</label>
-          <select class="form-input" id="assign-partner">
-            <option value="">— No partner —</option>
-          </select>
-        </div>
-      </div>
+    <!-- Quick actions -->
+    <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+      <a href="/field-app/admin/shifts.html?new=1" class="btn btn-gold">+ New Shift</a>
+      <a href="/field-app/admin/roster.html" class="btn btn-outline">Edit Roster</a>
+      <a href="/field-app/admin/field.html" class="btn btn-ghost">Field View</a>
     </div>
 
-    <!-- Stats (shown once addresses are logged) -->
-    <div id="cv-stats" class="stat-row" style="margin-bottom:16px;display:none;"></div>
+    <!-- Stats -->
+    <div class="stat-row" id="dash-stats">
+      <div class="stat-card"><div class="stat-n" id="stat-doors">—</div><div class="stat-l">Doors Knocked</div></div>
+      <div class="stat-card"><div class="stat-n" id="stat-accepted" style="color:var(--green);">—</div><div class="stat-l">Accepted</div></div>
+      <div class="stat-card"><div class="stat-n" id="stat-contact" style="color:var(--gold-acc);">—</div><div class="stat-l">Cassie to Contact</div></div>
+      <div class="stat-card"><div class="stat-n" id="stat-signs" style="color:var(--gold-acc);">—</div><div class="stat-l">Yard Signs</div></div>
+      <div class="stat-card"><div class="stat-n" id="stat-nosolic" style="color:var(--red);">—</div><div class="stat-l">No Soliciting</div></div>
+      <div class="stat-card"><div class="stat-n" id="stat-volunteers">—</div><div class="stat-l">Volunteers</div></div>
+    </div>
 
-    <!-- Notes -->
-    <div class="page-card" style="margin-bottom:16px;display:none;" id="notes-card">
+    <!-- Mini field map -->
+    <div class="page-card">
       <div class="page-card-title">
-        Shift Notes
-        <button class="btn btn-ghost btn-sm" onclick="saveNotes()">Save Notes</button>
+        Today's Field Activity
+        <a href="/field-app/admin/field.html" class="btn btn-ghost btn-sm">Full Field View →</a>
       </div>
-      <textarea id="cv-notes" class="form-input" rows="2" placeholder="Notes for this canvasser's shift..." style="resize:vertical;"></textarea>
+      <div id="dash-map" style="height:320px;border-radius:8px;border:1px solid var(--border);"></div>
     </div>
 
-    <!-- Route status + save -->
-    <div id="route-status-bar" style="display:none;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px;">
-      <div id="assign-status" style="font-size:12px;color:var(--muted);font-weight:600;"></div>
-      <button class="btn btn-gold" onclick="saveAssignments()">Save Route</button>
-    </div>
-
-    <!-- Map + address list -->
-    <div id="main-grid" style="display:none;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
-      <div class="page-card" style="padding:12px;">
-        <div class="page-card-title" style="margin-bottom:8px;">Map</div>
-        <div id="shift-map" style="height:440px;border-radius:8px;border:1px solid var(--border);"></div>
+    <!-- Upcoming shifts -->
+    <div class="page-card">
+      <div class="page-card-title">
+        Upcoming Shifts
+        <a href="/field-app/admin/shifts.html" class="btn btn-ghost btn-sm">All Shifts →</a>
       </div>
-      <div class="page-card" style="padding:12px;">
-        <div class="page-card-title" style="margin-bottom:8px;" id="addr-list-title">Addresses</div>
-        <div id="addr-list" style="max-height:440px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;"></div>
-      </div>
-    </div>
-
-    <!-- Empty state -->
-    <div id="no-canvasser" class="page-card" style="text-align:center;padding:32px;color:var(--muted);">
-      <div style="font-size:32px;margin-bottom:12px;">📋</div>
-      <div style="font-size:14px;font-weight:700;">Select a canvasser above to plan a route or view results</div>
-    </div>
-
-    <!-- Danger Zone -->
-    <div class="danger-zone">
-      <div class="danger-zone-title" onclick="toggleDanger()">
-        <span>⚠️ Edit Shift (Danger Zone)</span>
-        <span id="danger-arrow">▼</span>
-      </div>
-      <div class="danger-zone-body" id="danger-body">
-        <div style="font-size:12px;color:var(--red);margin-bottom:14px;">
-          Only make changes here if absolutely necessary.
-        </div>
-        <div class="page-card" style="margin-bottom:12px;">
-          <div class="page-card-title">Shift Details</div>
-          <div class="form-group">
-            <label class="form-label">Shift Notes</label>
-            <input class="form-input" id="edit-notes" type="text" placeholder="Shift notes...">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Volunteers</label>
-            <div id="edit-vol-grid" class="vol-check-grid"></div>
-          </div>
-          <button class="btn btn-gold btn-sm" onclick="saveShiftEdits()">Save Shift Details</button>
-        </div>
-        <div style="padding-top:8px;">
-          <button class="btn btn-danger btn-sm" onclick="deleteShift()">Delete This Shift</button>
-        </div>
+      <div id="dash-shifts">
+        <div style="color:var(--subtle);font-size:13px;">Loading shifts…</div>
       </div>
     </div>
 
   </main>
 </div>
 
-<div id="toast" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--black);border:1px solid var(--gold);color:#fff;font-size:13px;font-weight:600;padding:9px 20px;border-radius:20px;z-index:5000;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;"></div>
-
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
 <script src="/field-app/js/firebase.js"></script>
 <script src="/field-app/js/auth.js"></script>
 <script src="/field-app/js/data.js"></script>
 <script>
-var shiftDate = new URLSearchParams(window.location.search).get('date') || '';
-var roster = {}, shiftData = null, allAssignments = {}, allLogs = {};
-var shiftMap = null, mapMarkers = {};
-var currentCanvasserId = '';
-var adminAddresses = [], adminSelected = {}, adminRoute = [];
-var isPastShift = false;
-var _dragId = null;
+var dashMap = null;
+var roster = {};
+var canvassDays = {};
+var today = new Date().toISOString().slice(0,10);
 
-var PROP_META = {
-  house:    {label:'House',           color:'#27ae60'},
-  apartment:{label:'Apartment',       color:'#2563eb'},
-  senior:   {label:'55+ Community',   color:'#d97706'},
-  mobile:   {label:'Mobile Home Park',color:'#7c3aed'},
-  assisted: {label:'Assisted Living', color:'#e67e22'},
-};
-var RESULT_COLORS = {
-  'Not Home':'#64748b','Vacant':'#94a3b8','For Sale':'#7c3aed',
-  'No Soliciting':'#92400e','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb'
-};
+document.getElementById('dash-date').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
 
 initAuth(
-  function(user){ if(shiftDate) loadShift(); else window.location.href='/field-app/admin/shifts.html'; },
-  function(user){ window.location.href='/field-app/canvass.html'; }
+  function(user) { loadDashboard(); },
+  function(user) { window.location.href = '/field-app/canvass.html'; }
 );
 
-function loadShift() {
+function loadDashboard() {
   setFbBase();
-  Promise.all([fbGet('/roster'), fbGet('/canvass-days/'+shiftDate)]).then(function(r) {
-    roster = r[0] || {};
-    shiftData = r[1];
-    if (!shiftData) {
-      document.getElementById('shift-title').textContent='Shift not found';
-      return;
-    }
+  // Load roster and shifts in parallel
+  Promise.all([fbGet('/roster'), fbGet('/canvass-days')]).then(function(results) {
+    roster = results[0] || {};
+    canvassDays = results[1] || {};
+    renderShifts();
+    loadStats();
+    initDashMap();
+  });
+}
 
-    var hood = (window.NEIGHBORHOODS||[]).find(function(n){return n.key===shiftData.neighborhood;});
-    var hoodName = hood ? hood.displayName : (shiftData.neighborhood||'');
-    document.getElementById('shift-title').textContent = formatDate(shiftDate)+' — '+hoodName;
-    isPastShift = shiftDate < new Date().toISOString().slice(0,10);
-    document.getElementById('shift-sub').textContent = isPastShift ? 'Past shift' : 'Upcoming shift';
-    adminAddresses = (window.NEIGHBORHOOD_DATA&&window.NEIGHBORHOOD_DATA[shiftData.neighborhood])||[];
+function volName(id) {
+  return roster[id] ? roster[id].name : id;
+}
 
+function renderShifts() {
+  var upcoming = Object.entries(canvassDays)
+    .filter(function(p){ return p[0] >= today; })
+    .sort(function(a,b){ return a[0].localeCompare(b[0]); })
+    .slice(0, 5);
+
+  var el = document.getElementById('dash-shifts');
+  if (!upcoming.length) {
+    el.innerHTML = '<div style="color:var(--subtle);font-size:13px;">No upcoming shifts. <a href="/field-app/admin/shifts.html?new=1" style="color:var(--gold-acc);font-weight:700;">Create one →</a></div>';
+    return;
+  }
+
+  el.innerHTML = upcoming.map(function(pair) {
+    var date = pair[0], day = pair[1];
+    var hood = (window.NEIGHBORHOODS||[]).find(function(n){return n.key===day.neighborhood;});
+    var hoodName = hood ? hood.displayName : (day.neighborhood||'');
+    var vols = (day.volunteers||[]).map(volName);
+    var d = new Date(date+'T12:00:00');
+    var dayNum = d.getDate();
+    var mon = d.toLocaleDateString('en-US',{month:'short'});
+    return '<div class="shift-item" style="cursor:pointer;" onclick="location.href=\'/field-app/admin/shift.html?date='+date+'\'">' +
+      '<div class="shift-date-badge"><div class="day">'+dayNum+'</div><div class="month">'+mon+'</div></div>' +
+      '<div class="shift-info">' +
+        '<div class="shift-hood">'+hoodName+(day.notes?' · '+day.notes:'')+'</div>' +
+        '<div class="shift-meta">'+formatDate(date)+'</div>' +
+        (vols.length?'<div class="shift-vols">'+vols.map(function(n){return '<span class="shift-vol-pill">'+n+'</span>';}).join('')+'</div>':'') +
+      '</div>' +
+      '<div class="shift-actions">' +
+        '<a href="/field-app/admin/shift.html?date='+date+'" class="btn btn-ghost btn-sm">View</a>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function loadStats() {
+  // Load all logs across all neighborhoods and dates
+  var promises = (window.NEIGHBORHOODS||[]).map(function(n) {
+    return fbGet('/'+n.key+'/logs').catch(function(){return null;});
+  });
+  Promise.all(promises).then(function(results) {
+    var doors=0, accepted=0, contact=0, signs=0, nosolic=0;
+    results.forEach(function(hoodLogs) {
+      if (!hoodLogs) return;
+      Object.values(hoodLogs).forEach(function(dayLogs) {
+        Object.values(dayLogs).forEach(function(volLogs) {
+          Object.values(volLogs).forEach(function(log) {
+            doors++;
+            if (log.contact==='Accepted') accepted++;
+            if (log.wantContact) contact++;
+            if (log.wantSign) signs++;
+            if (log.contact==='No Soliciting') nosolic++;
+          });
+        });
+      });
+    });
+    document.getElementById('stat-doors').textContent = doors;
+    document.getElementById('stat-accepted').textContent = accepted;
+    document.getElementById('stat-contact').textContent = contact;
+    document.getElementById('stat-signs').textContent = signs;
+    document.getElementById('stat-nosolic').textContent = nosolic;
+    document.getElementById('stat-volunteers').textContent = Object.values(roster).filter(function(v){return v.status==='active';}).length;
+  });
+}
+
+function initDashMap() {
+  dashMap = L.map('dash-map', {zoomControl:true}).setView([45.017,-93.153], 14);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
+  }).addTo(dashMap);
+
+  var COLORS = {'Not Home':'#64748b','Vacant':'#475569','For Sale':'#7c3aed',
+    'No Soliciting':'#92400e','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb'};
+
+  (window.NEIGHBORHOODS||[]).forEach(function(n) {
     Promise.all([
-      fbGet('/'+shiftData.neighborhood+'/assignments/'+shiftDate),
-      fbGet('/'+shiftData.neighborhood+'/logs/'+shiftDate),
-    ]).then(function(r2) {
-      allAssignments = r2[0] || {};
-      allLogs = r2[1] || {};
-      buildCanvasserSelect();
-      buildDangerZone();
+      fbGet('/'+n.key+'/logs/'+today),
+      fbGet('/'+n.key+'/assignments/'+today)
+    ]).then(function(r) {
+      var dayLogs = r[0];
+      var dayAssigns = r[1];
+      var loggedIds = {};
+
+      if (dayLogs) {
+        Object.values(dayLogs).forEach(function(volLogs) {
+          if (!volLogs) return;
+          Object.entries(volLogs).forEach(function(pair) {
+            var addrId = pair[0], log = pair[1];
+            loggedIds[addrId] = true;
+            var addr = (window.NEIGHBORHOOD_DATA[n.key]||[]).find(function(a){return a.id===addrId;});
+            if (!addr) return;
+            var color = COLORS[log.contact] || '#888';
+            var dot = log.wantContact ? '<div style="position:absolute;top:-4px;right:-4px;width:8px;height:8px;background:#D4A832;border-radius:50%;border:1px solid #fff;"></div>' : '';
+            var icon = L.divIcon({className:'',html:'<div style="position:relative;width:12px;height:12px;background:'+color+';border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);">'+dot+'</div>',iconSize:[12,12],iconAnchor:[6,6]});
+            L.marker([addr.lat,addr.lng],{icon:icon})
+             .bindTooltip(addr.n+' '+addr.s+' - '+log.contact)
+             .addTo(dashMap);
+          });
+        });
+      }
+
+      // Show today's assigned-but-not-yet-knocked addresses in gold
+      if (dayAssigns) {
+        Object.values(dayAssigns).forEach(function(assignment) {
+          if (!assignment || !assignment.route) return;
+          assignment.route.forEach(function(addrId) {
+            if (loggedIds[addrId]) return;
+            var addr = (window.NEIGHBORHOOD_DATA[n.key]||[]).find(function(a){return a.id===addrId;});
+            if (!addr) return;
+            var icon = L.divIcon({className:'',html:'<div style="width:10px;height:10px;background:#D4A832;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);opacity:.8;"></div>',iconSize:[10,10],iconAnchor:[5,5]});
+            L.marker([addr.lat,addr.lng],{icon:icon})
+             .bindTooltip(addr.n+' '+addr.s+' - Assigned today, not yet knocked')
+             .addTo(dashMap);
+          });
+        });
+      }
     });
-  }).catch(function(e){
-    document.getElementById('shift-title').textContent='Load error';
-    document.getElementById('shift-sub').textContent=e.message;
   });
-}
-
-function volName(id){ return roster[id]?roster[id].name:id; }
-function activeVols(){
-  return Object.entries(roster)
-    .filter(function(e){return e[1].status==='active';})
-    .sort(function(a,b){return a[1].name.localeCompare(b[1].name);})
-    .map(function(e){return {id:e[0],name:e[1].name};});
-}
-
-function buildCanvasserSelect() {
-  var sel = document.getElementById('canvasser-select');
-  var ptSel = document.getElementById('assign-partner');
-  sel.innerHTML = '<option value="">— Select canvasser —</option>';
-  ptSel.innerHTML = '<option value="">— No partner —</option>';
-
-  // Prefer shift volunteers; fall back to whoever has assignments/logs; fall back to all active
-  var vols = shiftData.volunteers || [];
-  if (!vols.length) {
-    var fromAssign = Object.keys(allAssignments);
-    var fromLogs = Object.keys(allLogs);
-    vols = fromAssign.concat(fromLogs.filter(function(id){return fromAssign.indexOf(id)===-1;}));
-  }
-  if (!vols.length) vols = activeVols().map(function(v){return v.id;});
-
-  vols.forEach(function(id){
-    sel.innerHTML += '<option value="'+id+'">'+volName(id)+'</option>';
-    ptSel.innerHTML += '<option value="'+id+'">'+volName(id)+'</option>';
-  });
-
-  if (vols.length) {
-    sel.value = vols[0];
-    onCanvasserChange();
-  }
-}
-
-function onCanvasserChange() {
-  currentCanvasserId = document.getElementById('canvasser-select').value;
-  document.getElementById('partner-col').style.display = isPastShift ? 'none' : 'block';
-
-  if (!currentCanvasserId) {
-    document.getElementById('no-canvasser').style.display='block';
-    document.getElementById('main-grid').style.display='none';
-    document.getElementById('cv-stats').style.display='none';
-    document.getElementById('notes-card').style.display='none';
-    document.getElementById('route-status-bar').style.display='none';
-    return;
-  }
-
-  document.getElementById('no-canvasser').style.display='none';
-  document.getElementById('main-grid').style.display='grid';
-
-  // Load existing route/assignment
-  adminSelected = {}; adminRoute = [];
-  var saved = allAssignments[currentCanvasserId];
-  if (saved && Array.isArray(saved.route)) {
-    adminRoute = saved.route.slice();
-    adminSelected = Object.assign({}, saved.assignments||{});
-  } else if (saved) {
-    Object.keys(saved).forEach(function(k){
-      if (k!=='route'&&k!=='assignments'){ adminSelected[k]=true; adminRoute.push(k); }
-    });
-  }
-
-  if (!isPastShift) {
-    // Upcoming: show route planning UI
-    document.getElementById('route-status-bar').style.display='flex';
-    document.getElementById('assign-status').textContent = adminRoute.length+' addresses in route';
-    document.getElementById('notes-card').style.display='none';
-    document.getElementById('cv-stats').style.display='none';
-    document.getElementById('addr-list-title').textContent = 'Select Addresses';
-    document.getElementById('print-btn').style.display = adminRoute.length ? 'inline-flex' : 'none';
-  } else {
-    // Past: show results UI
-    document.getElementById('route-status-bar').style.display='none';
-    document.getElementById('notes-card').style.display='block';
-    document.getElementById('cv-stats').style.display='grid';
-    document.getElementById('cv-notes').value = shiftData['notes_'+currentCanvasserId] || shiftData.notes || '';
-    document.getElementById('addr-list-title').textContent = adminRoute.length+' Addresses — '+volName(currentCanvasserId);
-    document.getElementById('print-btn').style.display = adminRoute.length ? 'inline-flex' : 'none';
-    renderStats();
-  }
-
-  setTimeout(function(){ initOrRefreshMap(); renderAddrList(); }, 30);
-}
-
-function renderStats() {
-  var volLogs = allLogs[currentCanvasserId] || {};
-  var logs = Object.values(volLogs);
-  var accepted = logs.filter(function(l){return l.contact==='Accepted';}).length;
-  var contact = logs.filter(function(l){return l.wantContact;}).length;
-  var signs = logs.filter(function(l){return l.wantSign;}).length;
-  var nosolic = logs.filter(function(l){return l.contact==='No Soliciting';}).length;
-  document.getElementById('cv-stats').innerHTML =
-    statCard(logs.length,'Doors Knocked')+
-    statCard(adminRoute.length,'Assigned')+
-    statCard(accepted,'Accepted','#27ae60')+
-    statCard(contact,'Cassie to Contact','#D4A832')+
-    statCard(signs,'Yard Signs','#D4A832')+
-    statCard(nosolic,'No Soliciting','#c0392b');
-}
-function statCard(n,label,color){
-  return '<div class="stat-card"><div class="stat-n"'+(color?' style="color:'+color+';"':'')+'>'+n+'</div><div class="stat-l">'+label+'</div></div>';
-}
-
-function saveNotes() {
-  var notes = document.getElementById('cv-notes').value.trim();
-  var key = 'notes_'+currentCanvasserId;
-  var obj = {}; obj[key] = notes;
-  shiftData[key] = notes;
-  fbPatch('/canvass-days/'+shiftDate, obj).then(function(){ showToast('Notes saved'); })
-    .catch(function(){ showToast('Save failed'); });
-}
-
-// ── MAP ──────────────────────────────────────────────────────────────────────
-function initOrRefreshMap() {
-  var el = document.getElementById('shift-map');
-  if (!el) return;
-  if (!shiftMap) {
-    shiftMap = L.map('shift-map').setView([45.017,-93.153], 15);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-      attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
-    }).addTo(shiftMap);
-  }
-  shiftMap.invalidateSize();
-  refreshMapMarkers();
-}
-
-function refreshMapMarkers() {
-  if (!shiftMap) return;
-  Object.values(mapMarkers).forEach(function(m){shiftMap.removeLayer(m);});
-  mapMarkers = {};
-  var bounds = [];
-
-  if (!isPastShift) {
-    // Assign mode: show all addresses, gold+numbered if selected
-    adminAddresses.forEach(function(addr){
-      var sel = !!adminSelected[addr.id];
-      var routeIdx = adminRoute.indexOf(addr.id);
-      var meta = PROP_META[addr.t]||PROP_META.house;
-      var color = sel ? '#D4A832' : meta.color;
-      var size = sel ? 20 : 9;
-      var opacity = sel ? 1 : 0.35;
-      var label = sel && routeIdx>=0 ? '<span style="font-size:8px;font-weight:800;color:#1d1b16;">'+(routeIdx+1)+'</span>' : '';
-      var icon = L.divIcon({className:'', html:'<div style="width:'+size+'px;height:'+size+'px;background:'+color+';border-radius:50%;border:'+(sel?'2px solid rgba(0,0,0,.3)':'1.5px solid rgba(0,0,0,.1)')+';box-shadow:0 1px 4px rgba(0,0,0,.2);opacity:'+opacity+';display:flex;align-items:center;justify-content:center;">'+label+'</div>',iconSize:[size,size],iconAnchor:[size/2,size/2]});
-      var m = L.marker([addr.lat,addr.lng],{icon:icon}).addTo(shiftMap);
-      m.on('click', function(){ toggleAddr(addr.id); });
-      m.bindTooltip(addr.n+' '+addr.s);
-      mapMarkers[addr.id]=m;
-      bounds.push([addr.lat,addr.lng]);
-    });
-  } else {
-    // Results mode: only show route addresses, colored by result
-    var addrMap = {};
-    adminAddresses.forEach(function(a){addrMap[a.id]=a;});
-    var volLogs = allLogs[currentCanvasserId]||{};
-    adminRoute.forEach(function(addrId,i){
-      var addr = addrMap[addrId]; if(!addr) return;
-      var log = volLogs[addrId];
-      var color = log ? (RESULT_COLORS[log.contact]||'#888') : '#D4A832';
-      var label = '<span style="font-size:8px;font-weight:800;color:'+(log?'#fff':'#1d1b16')+';">'+(i+1)+'</span>';
-      var icon = L.divIcon({className:'', html:'<div style="width:20px;height:20px;background:'+color+';border-radius:50%;border:2px solid rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.3);">'+label+'</div>',iconSize:[20,20],iconAnchor:[10,10]});
-      var popup = '<strong>'+(i+1)+'. '+addr.n+' '+addr.s+'</strong>'+(addr.u?' &middot; '+addr.u:'');
-      if (log) { popup += '<br><span style="color:'+color+';font-weight:700;">'+log.contact+'</span>'; if(log.name) popup+='<br>'+log.name; }
-      var m = L.marker([addr.lat,addr.lng],{icon:icon}).bindPopup(popup).addTo(shiftMap);
-      mapMarkers[addrId]=m;
-      bounds.push([addr.lat,addr.lng]);
-    });
-  }
-
-  if (bounds.length) shiftMap.fitBounds(bounds,{padding:[20,20]});
-}
-
-// ── ADDRESS LIST ─────────────────────────────────────────────────────────────
-function toggleAddr(id) {
-  var siblings = getSiblingUnits(id);
-  var willSelect = !adminSelected[id];
-  siblings.forEach(function(sid){
-    if (willSelect) { if(!adminSelected[sid]){adminSelected[sid]=true; adminRoute.push(sid);} }
-    else { delete adminSelected[sid]; adminRoute = adminRoute.filter(function(r){return r!==sid;}); }
-  });
-  document.getElementById('assign-status').textContent = adminRoute.length+' addresses in route';
-  document.getElementById('print-btn').style.display = adminRoute.length ? 'inline-flex' : 'none';
-  refreshMapMarkers();
-  renderAddrList();
-}
-
-function getSiblingUnits(id) {
-  var addr = adminAddresses.find(function(a){return a.id===id;});
-  if (!addr||!addr.u) return [id];
-  return adminAddresses.filter(function(a){return a.n===addr.n&&a.s===addr.s;})
-    .map(function(a){return a.id;})
-    .sort(function(a,b){
-      var au=adminAddresses.find(function(x){return x.id===a;});
-      var bu=adminAddresses.find(function(x){return x.id===b;});
-      return (parseInt((au&&au.u||'').replace(/\D/g,''))||0)-(parseInt((bu&&bu.u||'').replace(/\D/g,''))||0);
-    });
-}
-
-function _ckDragStart(el){ _dragId=el.dataset.rid; el.style.opacity='0.5'; }
-function _ckDragOver(el){ el.style.background='#fdf6e0'; }
-function _ckDragLeave(el){ el.style.background='#fff'; }
-function _ckDragEnd(el){ _dragId=null; el.style.opacity='1'; }
-function _ckDrop(el){
-  el.style.background='#fff';
-  var tid=el.dataset.rid;
-  if(!_dragId||_dragId===tid) return;
-  var fi=adminRoute.indexOf(_dragId), ti=adminRoute.indexOf(tid);
-  if(fi===-1||ti===-1) return;
-  adminRoute.splice(fi,1); adminRoute.splice(ti,0,_dragId);
-  document.getElementById('assign-status').textContent=adminRoute.length+' addresses in route';
-  refreshMapMarkers(); renderAddrList();
-}
-function _ckToggle(el){ toggleAddr(el.dataset.aid); }
-
-function renderAddrList() {
-  var listEl = document.getElementById('addr-list');
-  var addrMap = {};
-  adminAddresses.forEach(function(a){addrMap[a.id]=a;});
-
-  if (!isPastShift) {
-    // Assign mode: draggable route + unselected list
-    var routeHtml = adminRoute.map(function(id,i){
-      var addr=addrMap[id]; if(!addr) return '';
-      var meta=PROP_META[addr.t]||PROP_META.house;
-      return '<div class="ck-route-row" draggable="true" data-rid="'+id+'"'
-        +' ondragstart="_ckDragStart(this)" ondragover="event.preventDefault();_ckDragOver(this)"'
-        +' ondragleave="_ckDragLeave(this)" ondrop="_ckDrop(this)" ondragend="_ckDragEnd(this)">'
-        +'<div style="color:#ccc;font-size:12px;cursor:grab;flex-shrink:0;user-select:none;">::</div>'
-        +'<div style="width:8px;height:8px;border-radius:50%;background:var(--gold);flex-shrink:0;"></div>'
-        +'<div style="flex:1;min-width:0;font-size:12px;font-weight:700;"><span style="color:var(--gold-acc);margin-right:4px;">'+(i+1)+'.</span>'+addr.n+' '+addr.s+(addr.u?' &middot; '+addr.u:'')+'<div style="font-size:10px;color:var(--subtle);font-weight:400;">'+meta.label+'</div></div>'
-        +'<button data-aid="'+id+'" onclick="_ckToggle(this)" style="border:none;background:none;cursor:pointer;color:var(--red);font-size:14px;padding:4px;flex-shrink:0;">&times;</button>'
-        +'</div>';
-    }).join('');
-    var divider = adminRoute.length ? '<div style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--subtle);padding:5px 10px;background:var(--light);">Not yet added</div>' : '';
-    var unsel = adminAddresses.filter(function(a){return !adminSelected[a.id];})
-      .sort(function(a,b){return parseInt(a.n||0)-parseInt(b.n||0);});
-    var unselHtml = unsel.map(function(addr){
-      var meta=PROP_META[addr.t]||PROP_META.house;
-      return '<div class="ck-unsel-row" data-aid="'+addr.id+'" onclick="_ckToggle(this)">'
-        +'<div style="width:8px;height:8px;border-radius:50%;border:1.5px solid #ccc;flex-shrink:0;"></div>'
-        +'<div style="flex:1;min-width:0;font-size:12px;font-weight:600;">'+addr.n+' '+addr.s+(addr.u?' &middot; '+addr.u:'')+'<div style="font-size:10px;color:var(--subtle);font-weight:400;">'+meta.label+'</div></div>'
-        +'</div>';
-    }).join('');
-    listEl.innerHTML = routeHtml+divider+unselHtml;
-    return;
-  }
-
-  // Past shift: editable results list
-  if (!adminRoute.length) {
-    listEl.innerHTML = '<div style="padding:16px;color:var(--subtle);font-size:13px;">No addresses assigned.</div>';
-    return;
-  }
-  var CONTACTS = ['Not Home','Vacant','For Sale','No Soliciting','Refused','Accepted','Other Language'];
-  var volLogs = allLogs[currentCanvasserId]||{};
-
-  var expandedRoute = [];
-  var seen = {};
-  adminRoute.forEach(function(addrId){
-    var addr = addrMap[addrId];
-    if (!addr) { if(!seen[addrId]){seen[addrId]=true; expandedRoute.push(addrId);} return; }
-    if (addr.u) {
-      getSiblingUnits(addrId).forEach(function(sid){ if(!seen[sid]){seen[sid]=true; expandedRoute.push(sid);} });
-    } else {
-      if(!seen[addrId]){seen[addrId]=true; expandedRoute.push(addrId);}
-    }
-  });
-
-  listEl.innerHTML = expandedRoute.map(function(addrId,i){
-    var addr = addrMap[addrId]; if(!addr) return '';
-    var log = volLogs[addrId];
-    var resultColor = log ? (RESULT_COLORS[log.contact]||'#888') : null;
-    var contactOpts = CONTACTS.map(function(c){return '<option value="'+c+'"'+(log&&log.contact===c?' selected':'')+'>'+c+'</option>';}).join('');
-    return '<div class="addr-log-row" data-addr-id="'+addrId+'">'
-      +'<div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:6px;">'
-        +'<div class="addr-log-num">'+(i+1)+'.</div>'
-        +'<div class="addr-log-addr">'+addr.n+' '+addr.s+(addr.u?' &middot; '+addr.u:'')+'</div>'
-        +(log?'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;background:'+resultColor+'22;color:'+resultColor+';">'+log.contact+'</span>':'<span class="not-knocked">Not knocked</span>')
-      +'</div>'
-      +'<div style="display:flex;flex-wrap:wrap;gap:6px;width:100%;padding-left:24px;">'
-        +'<select class="form-input log-contact" data-addr-id="'+addrId+'" style="font-size:11px;padding:4px 8px;width:auto;flex-shrink:0;"><option value="">— Result —</option>'+contactOpts+'</select>'
-        +'<input class="form-input log-name" data-addr-id="'+addrId+'" type="text" placeholder="First name" value="'+(log&&log.name?log.name:'')+'" style="font-size:11px;padding:4px 8px;width:110px;flex-shrink:0;">'
-        +'<input class="form-input log-phone" data-addr-id="'+addrId+'" type="tel" placeholder="Phone" value="'+(log&&log.phone?log.phone:'')+'" style="font-size:11px;padding:4px 8px;width:110px;flex-shrink:0;">'
-        +'<input class="form-input log-notes" data-addr-id="'+addrId+'" type="text" placeholder="Notes" value="'+(log&&log.notes?log.notes:'')+'" style="font-size:11px;padding:4px 8px;flex:1;min-width:120px;">'
-        +'<label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;"><input type="checkbox" class="log-lit" data-addr-id="'+addrId+'"'+(log&&(log.litLeft||log.cardLeft)?' checked':'')+'>Lit Left</label>'
-        +'<label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;"><input type="checkbox" class="log-sign" data-addr-id="'+addrId+'"'+(log&&log.wantSign?' checked':'')+'>🪧 Sign</label>'
-        +'<label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;"><input type="checkbox" class="log-contact-flag" data-addr-id="'+addrId+'"'+(log&&log.wantContact?' checked':'')+'>📞 Contact</label>'
-        +'<button class="log-save-btn" data-addr-id="'+addrId+'" onclick="_saveLog(this.dataset.addrId)" style="font-size:11px;font-weight:700;padding:4px 10px;background:var(--gold);border:none;border-radius:6px;cursor:pointer;">Save</button>'
-      +'</div>'
-    +'</div>';
-  }).join('');
-}
-
-function _saveLog(id){ saveAddrLog(id); }
-function saveAddrLog(addrId) {
-  var contact = document.querySelector('.log-contact[data-addr-id="'+addrId+'"]');
-  var name = document.querySelector('.log-name[data-addr-id="'+addrId+'"]');
-  var phone = document.querySelector('.log-phone[data-addr-id="'+addrId+'"]');
-  var notes = document.querySelector('.log-notes[data-addr-id="'+addrId+'"]');
-  var litEl = document.querySelector('.log-lit[data-addr-id="'+addrId+'"]');
-  var sign = document.querySelector('.log-sign[data-addr-id="'+addrId+'"]');
-  var contactFlag = document.querySelector('.log-contact-flag[data-addr-id="'+addrId+'"]');
-  if (!contact || !contact.value) { showToast('Select a contact result first'); return; }
-
-  var existing = (allLogs[currentCanvasserId]||{})[addrId] || {};
-  var entry = Object.assign({}, existing, {
-    contact: contact.value,
-    name: name?name.value.trim():'',
-    phone: phone?phone.value.trim():'',
-    notes: notes?notes.value.trim():'',
-    litLeft: litEl?litEl.checked:false,
-    wantSign: sign?sign.checked:false,
-    wantContact: contactFlag?contactFlag.checked:false,
-    canvasser: currentCanvasserId, volId: currentCanvasserId,
-    time: existing.time || new Date().toISOString(),
-  });
-
-  var path = '/'+shiftData.neighborhood+'/logs/'+shiftDate+'/'+currentCanvasserId+'/'+addrId;
-  fbPut(path, entry).then(function(){
-    if (!allLogs[currentCanvasserId]) allLogs[currentCanvasserId]={};
-    allLogs[currentCanvasserId][addrId]=entry;
-    showToast('Saved');
-    renderStats();
-  }).catch(function(){ showToast('Save failed'); });
-}
-
-function saveAssignments() {
-  if (!currentCanvasserId || !shiftData.neighborhood) { showToast('Select a canvasser first'); return; }
-  if (!adminRoute.length) { showToast('No addresses selected'); return; }
-  var partnerId = document.getElementById('assign-partner').value;
-  var payload = {route:adminRoute, assignments:adminSelected};
-  var saves = [fbPut('/'+shiftData.neighborhood+'/assignments/'+shiftDate+'/'+currentCanvasserId, payload)];
-  if (partnerId && partnerId!==currentCanvasserId) {
-    saves.push(fbPut('/'+shiftData.neighborhood+'/assignments/'+shiftDate+'/'+partnerId, payload));
-  }
-  Promise.all(saves).then(function(){
-    allAssignments[currentCanvasserId]=payload;
-    showToast('Route saved for '+volName(currentCanvasserId));
-  }).catch(function(){ showToast('Save failed'); });
-}
-
-// ── DANGER ZONE ──────────────────────────────────────────────────────────────
-function toggleDanger() {
-  var body = document.getElementById('danger-body');
-  var open = body.classList.toggle('open');
-  document.getElementById('danger-arrow').textContent = open?'▲':'▼';
-}
-function buildDangerZone() {
-  document.getElementById('edit-notes').value = shiftData.notes || '';
-  var grid = document.getElementById('edit-vol-grid');
-  grid.innerHTML = activeVols().map(function(v){
-    var checked = (shiftData.volunteers||[]).indexOf(v.id)!==-1;
-    return '<div class="vol-check-item'+(checked?' checked':'')+'" data-id="'+v.id+'" onclick="this.classList.toggle(\'checked\')">'
-      +'<div class="vci-box">&#x2713;</div><div class="vci-name">'+v.name+'</div></div>';
-  }).join('');
-}
-function saveShiftEdits() {
-  var notes = document.getElementById('edit-notes').value.trim();
-  var vols = Array.from(document.querySelectorAll('#edit-vol-grid .vol-check-item.checked')).map(function(el){return el.dataset.id;});
-  shiftData.notes = notes;
-  shiftData.volunteers = vols;
-  fbPut('/canvass-days/'+shiftDate, shiftData).then(function(){
-    buildCanvasserSelect();
-    showToast('Shift details saved');
-  }).catch(function(){showToast('Save failed');});
-}
-function deleteShift() {
-  if (!confirm('Delete shift for '+formatDate(shiftDate)+'? This cannot be undone.')) return;
-  fbPut('/canvass-days/'+shiftDate, null).then(function(){
-    window.location.href='/field-app/admin/shifts.html';
-  }).catch(function(){showToast('Delete failed');});
-}
-
-function printWalkSheet() {
-  if (!adminRoute.length) { showToast('No addresses in route'); return; }
-  var addrMap={};
-  adminAddresses.forEach(function(a){addrMap[a.id]=a;});
-  var sorted = adminRoute.filter(function(id){return !!addrMap[id];}).map(function(id){return addrMap[id];});
-  var hood=(window.NEIGHBORHOODS||[]).find(function(n){return n.key===shiftData.neighborhood;});
-  var hoodName=hood?hood.displayName:(shiftData.neighborhood||'');
-  var names=volName(currentCanvasserId);
-  var partnerId = document.getElementById('assign-partner').value;
-  if (partnerId && partnerId!==currentCanvasserId) names += ' & '+volName(partnerId);
-
-  var typeLabels={senior:'55+ — Call first',apartment:'Apt — Coordinate',mobile:'Mobile — Coordinate',assisted:'Assisted — Call first'};
-  var rows=sorted.map(function(addr,i){
-    var meta=addr.t!=='house'?(typeLabels[addr.t]||''):'';
-    return '<tr class="'+(parseInt(addr.n||0)%2===1?'odd':'even')+'">'
-      +'<td class="num">'+(i+1)+'</td>'
-      +'<td class="addr"><strong>'+addr.n+'</strong> '+addr.s+(addr.u?' &middot; <span style="font-weight:400;color:#6b6860;">'+addr.u+'</span>':'')
-        +(meta?'<div style="font-size:7.5pt;color:#d97706;font-weight:600;">'+meta+'</div>':'')+'</td>'
-      +'<td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td>'
-      +'<td class="notes"></td></tr>';
-  }).join('');
-
-  var css='body{font-family:Outfit,sans-serif;font-size:9.5pt;color:#1d1b16;margin:0;}'
-    +'.page{padding:10mm 12mm;}'
-    +'.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:6px;border-bottom:3px solid #D4A832;margin-bottom:8px;}'
-    +'.hdr-l .camp{font-size:7.5pt;font-weight:800;color:#9A7215;}.hdr-l .title{font-size:14pt;font-weight:800;}.hdr-l .meta{font-size:8pt;color:#6b6860;}'
-    +'.hdr-r{text-align:right;}.hdr-r .cnt{font-size:20pt;font-weight:800;color:#D4A832;line-height:1;}.hdr-r .lbl{font-size:7pt;color:#6b6860;text-transform:uppercase;}'
-    +'table{width:100%;border-collapse:collapse;}'
-    +'th{font-size:7pt;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#6b6860;padding:4px;border-bottom:2px solid #e0ddd3;text-align:center;}'
-    +'th.al{text-align:left;}td{padding:4px;border-bottom:1px solid #f0ede4;vertical-align:middle;}'
-    +'.odd{background:#fff;}.even{background:#faf8f4;}'
-    +'.num{width:20px;text-align:right;padding-right:6px;font-size:8.5pt;font-weight:800;color:#a8a49a;}'
-    +'.addr{font-size:9.5pt;font-weight:700;min-width:160px;}'
-    +'.cb{width:26px;text-align:center;border-left:1px solid #e8e4dc;}'
-    +'.cb::after{content:"";display:inline-block;width:10px;height:10px;border:1.5px solid #888;border-radius:2px;}'
-    +'.notes{min-width:100px;border-left:1px solid #e8e4dc;}'
-    +'.footer{margin-top:8px;padding-top:4px;border-top:1px solid #e0ddd3;font-size:7.5pt;color:#a8a49a;display:flex;justify-content:space-between;}'
-    +'@media print{body{margin:0;}tr{page-break-inside:avoid;}}';
-
-  var body='<!DOCTYPE html><html><head><meta charset="UTF-8">'
-    +'<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">'
-    +'<title>Walk Sheet</title><style>'+css+'</style></head><body>'
-    +'<div class="page">'
-    +'<div class="hdr"><div class="hdr-l"><div class="camp">Cassie for Roseville &mdash; Field App</div><div class="title">Walk Sheet: '+names+'</div><div class="meta">'+hoodName+' &middot; '+formatDateLong(shiftDate)+'</div></div>'
-    +'<div class="hdr-r"><div class="cnt">'+sorted.length+'</div><div class="lbl">Addresses</div></div></div>'
-    +'<table><thead><tr><th></th><th class="al">Address</th><th>Not Home</th><th>Vacant</th><th>For Sale</th><th>No Solic.</th><th>Refused</th><th>Accepted</th><th>Other</th><th style="text-align:left;padding-left:6px;">Notes / Contact / Sign</th></tr></thead>'
-    +'<tbody>'+rows+'</tbody></table>'
-    +'<div class="footer"><span>Cassie Iverson for Roseville City Council 2026 &middot; cassie4roseville.com</span><span>Printed '+new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</span></div>'
-    +'</div><script>window.onload=function(){window.print();};<\/script></body></html>';
-
-  try {
-    var blob=new Blob([body],{type:'text/html'});
-    var url=URL.createObjectURL(blob);
-    var w=window.open(url,'_blank');
-    if(!w) showToast('Allow popups to print');
-    setTimeout(function(){URL.revokeObjectURL(url);},60000);
-  } catch(e){showToast('Print error: '+e.message);}
-}
-
-var _tt;
-function showToast(msg){
-  var t=document.getElementById('toast');
-  t.textContent=msg; t.style.opacity='1';
-  clearTimeout(_tt);
-  _tt=setTimeout(function(){t.style.opacity='0';},2500);
 }
 </script>
 </body>
