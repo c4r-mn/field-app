@@ -66,6 +66,17 @@
       <div class="filter-pill active" data-show="contact" onclick="toggleShow('contact')">Cassie to Contact</div>
     </div>
 
+    <div class="field-filters" style="margin-top:6px;">
+      <span style="font-size:11px;font-weight:700;color:var(--muted);">Type:</span>
+      <div class="filter-pill active" data-type="house" onclick="toggleType('house')">House</div>
+      <div class="filter-pill active" data-type="condo" onclick="toggleType('condo')">Condo</div>
+      <div class="filter-pill active" data-type="apartment" onclick="toggleType('apartment')">Apartment</div>
+      <div class="filter-pill active" data-type="senior" onclick="toggleType('senior')">55+ Community</div>
+      <div class="filter-pill active" data-type="assisted" onclick="toggleType('assisted')">Assisted Living</div>
+      <div class="filter-pill active" data-type="skilled-nursing" onclick="toggleType('skilled-nursing')">Skilled Nursing</div>
+      <div class="filter-pill active" data-type="mobile" onclick="toggleType('mobile')">Mobile Home Park</div>
+    </div>
+
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;font-weight:600;color:var(--muted);align-items:center;">
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#27ae60;margin-right:4px;"></span>Accepted</span>
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#64748b;margin-right:4px;"></span>Not Home</span>
@@ -98,6 +109,7 @@ var canvassDays = {};
 var roster = {};
 var activeDate = 'all';
 var showFilters = {completed:true,'not-knocked':true,upcoming:true,nosolic:true,contact:true};
+var typeFilters = {house:true,condo:true,apartment:true,senior:true,assisted:true,'skilled-nursing':true,mobile:true};
 var mapMarkers = {};
 var today = new Date().toISOString().slice(0,10);
 
@@ -270,6 +282,13 @@ function toggleShow(key) {
   refreshFieldMarkers();
 }
 
+function toggleType(key) {
+  typeFilters[key] = !typeFilters[key];
+  var el = document.querySelector('[data-type="'+key+'"]');
+  if (el) el.classList.toggle('active', typeFilters[key]);
+  refreshFieldMarkers();
+}
+
 function refreshFieldMarkers() {
   if (!fieldMap) return;
   Object.values(mapMarkers).forEach(function(m){ fieldMap.removeLayer(m); });
@@ -281,6 +300,7 @@ function refreshFieldMarkers() {
       var isUpcoming = !!upcomingAssigned[addr.id];
       var isNoSolic = log && log.contact === 'No Soliciting';
       var isContact = log && log.wantContact;
+      if (!typeFilters[addr.t||'house']) return;
       if (activeDate !== 'all' && isLogged && log.date !== activeDate) return;
       if (isLogged && isNoSolic && !showFilters.nosolic) return;
       if (isLogged && !isNoSolic && !showFilters.completed) return;
