@@ -102,7 +102,10 @@
     <!-- Route status + save -->
     <div id="route-status-bar" style="display:none;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px;">
       <div id="assign-status" style="font-size:12px;color:var(--muted);font-weight:600;"></div>
-      <button class="btn btn-gold" onclick="saveAssignments()">Save Route</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="reverseRoute()">&#8645; Reverse Route</button>
+        <button class="btn btn-gold" onclick="saveAssignments()">Save Route</button>
+      </div>
     </div>
 
     <!-- Map + address list -->
@@ -168,6 +171,7 @@ var roster = {}, shiftData = null, allAssignments = {}, allLogs = {};
 var shiftMap = null, mapMarkers = {};
 var currentCanvasserId = '';
 var adminAddresses = [], adminSelected = {}, adminRoute = [];
+var everVisited = {};
 var isPastShift = false;
 var _dragId = null;
 
@@ -208,9 +212,20 @@ function loadShift() {
     Promise.all([
       fbGet('/'+shiftData.neighborhood+'/assignments/'+shiftDate),
       fbGet('/'+shiftData.neighborhood+'/logs/'+shiftDate),
+      fbGet('/'+shiftData.neighborhood+'/logs'),
     ]).then(function(r2) {
       allAssignments = r2[0] || {};
       allLogs = r2[1] || {};
+      // Build set of addresses ever visited (any date, any canvasser) for this neighborhood
+      everVisited = {};
+      var allDatesLogs = r2[2] || {};
+      Object.values(allDatesLogs).forEach(function(dayLogs){
+        if (!dayLogs) return;
+        Object.values(dayLogs).forEach(function(volLogs){
+          if (!volLogs) return;
+          Object.keys(volLogs).forEach(function(addrId){ everVisited[addrId] = true; });
+        });
+      });
       buildCanvasserSelect();
       buildDangerZone();
     });
@@ -353,19 +368,20 @@ function refreshMapMarkers() {
   var bounds = [];
 
   if (!isPastShift) {
-    // Assign mode: show all addresses, gold+numbered if selected
+    // Assign mode: show all addresses, gold+numbered if selected, greyed if already visited
     adminAddresses.forEach(function(addr){
       var sel = !!adminSelected[addr.id];
+      var visited = !!everVisited[addr.id];
       var routeIdx = adminRoute.indexOf(addr.id);
       var meta = PROP_META[addr.t]||PROP_META.house;
-      var color = sel ? '#D4A832' : meta.color;
-      var size = sel ? 20 : 9;
-      var opacity = sel ? 1 : 0.35;
+      var color = sel ? '#D4A832' : (visited ? '#b8b4a8' : meta.color);
+      var size = sel ? 20 : (visited ? 7 : 9);
+      var opacity = sel ? 1 : (visited ? 0.4 : 0.35);
       var label = sel && routeIdx>=0 ? '<span style="font-size:8px;font-weight:800;color:#1d1b16;">'+(routeIdx+1)+'</span>' : '';
       var icon = L.divIcon({className:'', html:'<div style="width:'+size+'px;height:'+size+'px;background:'+color+';border-radius:50%;border:'+(sel?'2px solid rgba(0,0,0,.3)':'1.5px solid rgba(0,0,0,.1)')+';box-shadow:0 1px 4px rgba(0,0,0,.2);opacity:'+opacity+';display:flex;align-items:center;justify-content:center;">'+label+'</div>',iconSize:[size,size],iconAnchor:[size/2,size/2]});
       var m = L.marker([addr.lat,addr.lng],{icon:icon}).addTo(shiftMap);
       m.on('click', function(){ toggleAddr(addr.id); });
-      m.bindTooltip(addr.n+' '+addr.s);
+      m.bindTooltip(addr.n+' '+addr.s+(visited?' (already visited)':''));
       mapMarkers[addr.id]=m;
       bounds.push([addr.lat,addr.lng]);
     });
@@ -392,6 +408,14 @@ function refreshMapMarkers() {
 }
 
 // ── ADDRESS LIST ─────────────────────────────────────────────────────────────
+function reverseRoute() {
+  if (!adminRoute.length) { showToast('No route to reverse'); return; }
+  adminRoute.reverse();
+  refreshMapMarkers();
+  renderAddrList();
+  showToast('Route reversed — remember to Save Route');
+}
+
 function toggleAddr(id) {
   var siblings = getSiblingUnits(id);
   var willSelect = !adminSelected[id];
@@ -457,9 +481,10 @@ function renderAddrList() {
       .sort(function(a,b){return parseInt(a.n||0)-parseInt(b.n||0);});
     var unselHtml = unsel.map(function(addr){
       var meta=PROP_META[addr.t]||PROP_META.house;
-      return '<div class="ck-unsel-row" data-aid="'+addr.id+'" onclick="_ckToggle(this)">'
-        +'<div style="width:8px;height:8px;border-radius:50%;border:1.5px solid #ccc;flex-shrink:0;"></div>'
-        +'<div style="flex:1;min-width:0;font-size:12px;font-weight:600;">'+addr.n+' '+addr.s+(addr.u?' &middot; '+addr.u:'')+'<div style="font-size:10px;color:var(--subtle);font-weight:400;">'+meta.label+'</div></div>'
+      var visited = !!everVisited[addr.id];
+      return '<div class="ck-unsel-row" data-aid="'+addr.id+'" onclick="_ckToggle(this)" style="'+(visited?'opacity:.5;':'')+'">'
+        +'<div style="width:8px;height:8px;border-radius:50%;border:1.5px solid '+(visited?'#b8b4a8':'#ccc')+';flex-shrink:0;"></div>'
+        +'<div style="flex:1;min-width:0;font-size:12px;font-weight:600;">'+addr.n+' '+addr.s+(addr.u?' &middot; '+addr.u:'')+'<div style="font-size:10px;color:var(--subtle);font-weight:400;">'+meta.label+(visited?' &middot; already visited':'')+'</div></div>'
         +'</div>';
     }).join('');
     listEl.innerHTML = routeHtml+divider+unselHtml;
@@ -602,14 +627,12 @@ function printWalkSheet() {
   var partnerId = document.getElementById('assign-partner').value;
   if (partnerId && partnerId!==currentCanvasserId) names += ' & '+volName(partnerId);
 
-  // Build static route map with numbered pins
-  var lats=sorted.map(function(a){return a.lat;});
-  var lngs=sorted.map(function(a){return a.lng;});
-  var centerLat=(Math.min.apply(null,lats)+Math.max.apply(null,lats))/2;
-  var centerLng=(Math.min.apply(null,lngs)+Math.max.apply(null,lngs))/2;
-  var markerStr=sorted.slice(0,40).map(function(a){return a.lat+','+a.lng+',ol-marker-red';}).join('|');
-  var staticMapUrl='https://staticmap.openstreetmap.de/staticmap.php?center='+centerLat+','+centerLng
-    +'&zoom=15&size=800x380&maptype=osmarenderer&markers='+encodeURIComponent(markerStr);
+  // Build a QR code linking to live turn-by-turn directions in Google Maps
+  // (more reliable and more useful than a static map image)
+  var gmWaypoints = sorted.slice(0,23).map(function(a){return a.lat+','+a.lng;}).join('/');
+  var googleMapsUrl = 'https://www.google.com/maps/dir/'+gmWaypoints;
+  var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='+encodeURIComponent(googleMapsUrl);
+  var routeTruncated = sorted.length > 23;
 
   var typeLabels={senior:'55+ — Call first',apartment:'Apt — Coordinate',mobile:'Mobile — Coordinate',assisted:'Assisted — Call first'};
   var rows=sorted.map(function(addr,i){
@@ -645,9 +668,12 @@ function printWalkSheet() {
     +'<div class="page">'
     +'<div class="hdr"><div class="hdr-l"><div class="camp">Cassie for Roseville &mdash; Field App</div><div class="title">Walk Sheet: '+names+'</div><div class="meta">'+hoodName+' &middot; '+formatDateLong(shiftDate)+'</div></div>'
     +'<div class="hdr-r"><div class="cnt">'+sorted.length+'</div><div class="lbl">Addresses</div></div></div>'
-    +'<div style="margin-bottom:8px;">'
-      +'<img src="'+staticMapUrl+'" style="width:100%;height:auto;border:1px solid #e0ddd3;border-radius:4px;display:block;" />'
-      +'<div style="font-size:7pt;color:#a8a49a;text-align:center;margin-top:2px;">Route map &middot; numbers correspond to list below</div>'
+    +'<div style="margin-bottom:10px;display:flex;align-items:center;gap:12px;padding:8px;border:1px solid #e0ddd3;border-radius:6px;background:#faf8f4;">'
+      +'<img src="'+qrUrl+'" style="width:80px;height:80px;flex-shrink:0;" />'
+      +'<div style="font-size:8pt;color:#4b463a;">'
+        +'<strong>Scan for turn-by-turn directions</strong><br>'
+        +'Opens the full route in Google Maps'+(routeTruncated?' (first 23 stops — Google Maps link limit)':'')
+      +'</div>'
     +'</div>'
     +'<table><thead><tr><th></th><th class="al">Address</th><th>Not Home</th><th>Vacant</th><th>For Sale</th><th>No Solic.</th><th>Refused</th><th>Accepted</th><th>Other</th><th style="text-align:left;padding-left:6px;">Notes / Contact / Sign</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table>'
