@@ -72,13 +72,13 @@
 
     <div class="field-filters" style="margin-top:6px;">
       <span style="font-size:11px;font-weight:700;color:var(--muted);">Type:</span>
-      <div class="filter-pill active" data-type="house" onclick="toggleType('house')">House</div>
-      <div class="filter-pill active" data-type="condo" onclick="toggleType('condo')">Condo</div>
-      <div class="filter-pill active" data-type="apartment" onclick="toggleType('apartment')">Apartment</div>
-      <div class="filter-pill active" data-type="senior" onclick="toggleType('senior')">55+ Community</div>
-      <div class="filter-pill active" data-type="assisted" onclick="toggleType('assisted')">Assisted Living</div>
-      <div class="filter-pill active" data-type="skilled-nursing" onclick="toggleType('skilled-nursing')">Skilled Nursing</div>
-      <div class="filter-pill active" data-type="mobile" onclick="toggleType('mobile')">Mobile Home Park</div>
+      <div class="filter-pill active" data-type="house" onclick="toggleType('house')">House <span class="pill-count" id="count-house">0</span></div>
+      <div class="filter-pill active" data-type="condo" onclick="toggleType('condo')">Condo <span class="pill-count" id="count-condo">0</span></div>
+      <div class="filter-pill active" data-type="apartment" onclick="toggleType('apartment')">Apartment <span class="pill-count" id="count-apartment">0</span></div>
+      <div class="filter-pill active" data-type="senior" onclick="toggleType('senior')">55+ Community <span class="pill-count" id="count-senior">0</span></div>
+      <div class="filter-pill active" data-type="assisted" onclick="toggleType('assisted')">Assisted Living <span class="pill-count" id="count-assisted">0</span></div>
+      <div class="filter-pill active" data-type="skilled-nursing" onclick="toggleType('skilled-nursing')">Skilled Nursing <span class="pill-count" id="count-skilled-nursing">0</span></div>
+      <div class="filter-pill active" data-type="mobile" onclick="toggleType('mobile')">Mobile Home Park <span class="pill-count" id="count-mobile">0</span></div>
     </div>
 
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;font-weight:600;color:var(--muted);align-items:center;">
@@ -318,6 +318,7 @@ function refreshFieldMarkers() {
   Object.values(mapMarkers).forEach(function(m){ fieldMap.removeLayer(m); });
   mapMarkers = {};
   var bounds = [];
+  var typeTally = {house:0,condo:0,apartment:0,senior:0,assisted:0,'skilled-nursing':0,mobile:0};
 
   activeNeighborhoods().forEach(function(n) {
     (window.NEIGHBORHOOD_DATA[n.key]||[]).forEach(function(addr) {
@@ -326,12 +327,15 @@ function refreshFieldMarkers() {
       var isUpcoming = !!upcomingAssigned[addr.id];
       var isNoSolic = log && log.contact === 'No Soliciting';
       var isContact = log && log.wantContact;
-      if (!typeFilters[addr.t||'house']) return;
       if (activeDate !== 'all' && isLogged && log.date !== activeDate) return;
       if (isLogged && isNoSolic && !showFilters.nosolic) return;
       if (isLogged && !isNoSolic && !showFilters.completed) return;
       if (!isLogged && isUpcoming && !showFilters.upcoming) return;
       if (!isLogged && !isUpcoming && !showFilters['not-knocked']) return;
+
+      var addrType = addr.t || 'house';
+      typeTally[addrType] = (typeTally[addrType]||0) + 1;
+      if (!typeFilters[addrType]) return;
 
       var color, radius, opacity;
       if (isLogged) { color=RESULT_COLORS[log.contact]||'#888'; radius=5; opacity=1; }
@@ -373,6 +377,11 @@ function refreshFieldMarkers() {
       mapMarkers[addr.id] = marker;
       bounds.push([addr.lat, addr.lng]);
     });
+  });
+
+  Object.keys(typeTally).forEach(function(t){
+    var el = document.getElementById('count-'+t);
+    if (el) el.textContent = typeTally[t];
   });
 
   if (bounds.length && mapNeedsFit) {
