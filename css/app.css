@@ -247,10 +247,10 @@ html,body{height:100%;font-family:'Outfit',sans-serif;background:var(--cream);co
 
 #fab-toggle{display:none;position:fixed;bottom:24px;right:16px;z-index:700;background:var(--gold);color:var(--black);border:none;border-radius:28px;padding:12px 20px;font-family:'Outfit',sans-serif;font-size:13px;font-weight:800;box-shadow:0 4px 16px rgba(0,0,0,.2);cursor:pointer;align-items:center;gap:8px;}
 
-.leaflet-popup-content-wrapper{background:var(--white)!important;border:2px solid var(--gold)!important;border-radius:10px!important;color:var(--text)!important;padding:0!important;font-family:'Outfit',sans-serif!important;box-shadow:0 4px 20px rgba(0,0,0,.12)!important;}
-.leaflet-popup-content{margin:0!important;}
+.leaflet-popup-content-wrapper{background:var(--white)!important;border:2px solid var(--gold)!important;border-radius:10px!important;color:var(--text)!important;padding:4px!important;font-family:'Outfit',sans-serif!important;box-shadow:0 4px 20px rgba(0,0,0,.12)!important;}
+.leaflet-popup-content{margin:8px 12px!important;line-height:1.25!important;}
 .leaflet-popup-tip-container{display:none;}
-.leaflet-popup-close-button{color:var(--muted)!important;font-size:18px!important;top:8px!important;right:10px!important;width:auto!important;height:auto!important;}
+.leaflet-popup-close-button{color:var(--muted)!important;font-size:18px!important;top:8px!important;right:8px!important;width:auto!important;height:auto!important;}
 .mpop{padding:14px 16px;min-width:190px;max-width:260px;}
 .mpop-addr{font-size:14px;font-weight:700;padding-right:20px;margin-bottom:2px;}
 .mpop-meta{font-size:11px;color:var(--muted);margin-bottom:6px;}
@@ -434,3 +434,8 @@ body{padding-top:36px;} /* account for user bar */
   background:var(--white);color:var(--muted);font-family:'Outfit',sans-serif;font-size:14px;
   font-weight:700;cursor:pointer;transition:all .15s;}
 .door-cancel-btn:hover{border-color:var(--gold);color:var(--text);}
+
+/* Filter pill count badges */
+.pill-count{display:inline-block;background:rgba(0,0,0,.12);border-radius:8px;
+  padding:1px 6px;font-size:10px;font-weight:800;margin-left:3px;}
+.filter-pill.active .pill-count{background:rgba(0,0,0,.18);}
