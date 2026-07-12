@@ -73,12 +73,18 @@
     <div class="field-filters" style="margin-top:6px;">
       <span style="font-size:11px;font-weight:700;color:var(--muted);">Type:</span>
       <div class="filter-pill active" data-type="house" onclick="toggleType('house')">House <span class="pill-count" id="count-house">0</span></div>
+      <div class="filter-pill active" data-type="townhome" onclick="toggleType('townhome')">Townhome <span class="pill-count" id="count-townhome">0</span></div>
+      <div class="filter-pill active" data-type="twin-home" onclick="toggleType('twin-home')">Twin Home <span class="pill-count" id="count-twin-home">0</span></div>
+      <div class="filter-pill active" data-type="duplex" onclick="toggleType('duplex')">Duplex <span class="pill-count" id="count-duplex">0</span></div>
+      <div class="filter-pill active" data-type="triplex" onclick="toggleType('triplex')">Triplex <span class="pill-count" id="count-triplex">0</span></div>
+      <div class="filter-pill active" data-type="quadplex" onclick="toggleType('quadplex')">Quadplex <span class="pill-count" id="count-quadplex">0</span></div>
       <div class="filter-pill active" data-type="condo" onclick="toggleType('condo')">Condo <span class="pill-count" id="count-condo">0</span></div>
       <div class="filter-pill active" data-type="apartment" onclick="toggleType('apartment')">Apartment <span class="pill-count" id="count-apartment">0</span></div>
       <div class="filter-pill active" data-type="senior" onclick="toggleType('senior')">55+ Community <span class="pill-count" id="count-senior">0</span></div>
       <div class="filter-pill active" data-type="assisted" onclick="toggleType('assisted')">Assisted Living <span class="pill-count" id="count-assisted">0</span></div>
       <div class="filter-pill active" data-type="skilled-nursing" onclick="toggleType('skilled-nursing')">Skilled Nursing <span class="pill-count" id="count-skilled-nursing">0</span></div>
       <div class="filter-pill active" data-type="mobile" onclick="toggleType('mobile')">Mobile Home Park <span class="pill-count" id="count-mobile">0</span></div>
+      <div class="filter-pill active" data-type="church" onclick="toggleType('church')">Church (skip) <span class="pill-count" id="count-church">0</span></div>
     </div>
 
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;font-weight:600;color:var(--muted);align-items:center;">
@@ -115,13 +121,28 @@ var activeDate = 'all';
 var activeHood = 'all';
 var canvasRenderer = null;
 var showFilters = {completed:true,'not-knocked':true,upcoming:true,nosolic:true,contact:true};
-var typeFilters = {house:true,condo:true,apartment:true,senior:true,assisted:true,'skilled-nursing':true,mobile:true};
+var typeFilters = {house:true,townhome:true,'twin-home':true,duplex:true,triplex:true,quadplex:true,condo:true,apartment:true,senior:true,assisted:true,'skilled-nursing':true,mobile:true,church:true};
 var mapMarkers = {};
 var today = new Date().toISOString().slice(0,10);
 
 var RESULT_COLORS = {
   'Not Home':'#64748b','Vacant':'#94a3b8','For Sale':'#7c3aed',
   'No Soliciting':'#92400e','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb'
+};
+var PROP_META_FV = {
+  house:            {label:'House',            color:'#27ae60'},
+  townhome:         {label:'Townhome',         color:'#16a34a'},
+  'twin-home':      {label:'Twin Home',        color:'#65a30d'},
+  duplex:           {label:'Duplex',           color:'#0d9488'},
+  triplex:          {label:'Triplex',          color:'#0891b2'},
+  quadplex:         {label:'Quadplex',         color:'#0369a1'},
+  condo:            {label:'Condo',            color:'#0891b2'},
+  apartment:        {label:'Apartment',        color:'#2563eb'},
+  senior:           {label:'55+ Community',    color:'#d97706'},
+  assisted:         {label:'Assisted Living',  color:'#e67e22'},
+  'skilled-nursing':{label:'Skilled Nursing',  color:'#dc2626'},
+  mobile:           {label:'Mobile Home Park', color:'#7c3aed'},
+  church:           {label:'Church',           color:'#a8a49a'},
 };
 var CONTACT_OPTIONS = ['Not Home','Vacant','For Sale','No Soliciting','Refused','Accepted','Other Language'];
 
@@ -313,12 +334,19 @@ function toggleType(key) {
   refreshFieldMarkers();
 }
 
+var MULTI_UNIT_TYPES = {apartment:true, condo:true};
+
 function refreshFieldMarkers() {
   if (!fieldMap) return;
   Object.values(mapMarkers).forEach(function(m){ fieldMap.removeLayer(m); });
   mapMarkers = {};
   var bounds = [];
-  var typeTally = {house:0,condo:0,apartment:0,senior:0,assisted:0,'skilled-nursing':0,mobile:0};
+  var typeTally = {house:0,townhome:0,'twin-home':0,duplex:0,triplex:0,quadplex:0,condo:0,apartment:0,senior:0,assisted:0,'skilled-nursing':0,mobile:0,church:0};
+
+  // First pass: collect visible addresses, grouping apartment/condo units that
+  // share a building coordinate so we render ONE marker per building instead
+  // of one per unit (a 33-unit condo building was rendering as 33 stacked dots).
+  var buildingGroups = {}; // key: "lat,lng" -> array of addr
 
   activeNeighborhoods().forEach(function(n) {
     (window.NEIGHBORHOOD_DATA[n.key]||[]).forEach(function(addr) {
@@ -326,7 +354,6 @@ function refreshFieldMarkers() {
       var isLogged = !!log;
       var isUpcoming = !!upcomingAssigned[addr.id];
       var isNoSolic = log && log.contact === 'No Soliciting';
-      var isContact = log && log.wantContact;
       if (activeDate !== 'all' && isLogged && log.date !== activeDate) return;
       if (isLogged && isNoSolic && !showFilters.nosolic) return;
       if (isLogged && !isNoSolic && !showFilters.completed) return;
@@ -337,46 +364,22 @@ function refreshFieldMarkers() {
       typeTally[addrType] = (typeTally[addrType]||0) + 1;
       if (!typeFilters[addrType]) return;
 
-      var color, radius, opacity;
-      if (isLogged) { color=RESULT_COLORS[log.contact]||'#888'; radius=5; opacity=1; }
-      else if (isUpcoming) { color='#D4A832'; radius=4; opacity=.7; }
-      else { color='#e0ddd3'; radius=3.5; opacity=.5; }
-
-      // Fast canvas-rendered circle marker instead of a DOM-based divIcon —
-      // this is what makes large neighborhoods (thousands of points) responsive.
-      var marker = L.circleMarker([addr.lat, addr.lng], {
-        renderer: canvasRenderer,
-        radius: radius,
-        fillColor: color,
-        fillOpacity: opacity,
-        color: isContact ? '#D4A832' : 'rgba(0,0,0,.15)',
-        weight: isContact ? 2.5 : 1,
-      }).addTo(fieldMap);
-
-      marker.bindPopup(function() {
-        var popup = '<div style="min-width:190px;">';
-        popup += '<strong>'+addr.n+' '+addr.s+(addr.u?' - '+addr.u:'')+'</strong>';
-        if (isLogged) {
-          popup += '<div style="margin-top:4px;">';
-          popup += '<strong style="color:'+color+';">'+log.contact+'</strong><br>';
-          if (log.name) popup += log.name+(log.phone?' - '+log.phone:'')+'<br>';
-          if (log.wantSign) popup += 'Wants Yard Sign<br>';
-          if (log.wantContact) popup += 'Cassie to Contact<br>';
-          if (log.notes) popup += '<em>'+log.notes+'</em><br>';
-          popup += '</div>';
-          popup += '<button onclick="openFvEdit(\''+addr.id+'\')" style="margin-top:6px;font-size:11px;font-weight:700;padding:5px 12px;background:#D4A832;border:none;border-radius:5px;cursor:pointer;width:100%;">Edit</button>';
-        } else if (isUpcoming) {
-          popup += '<br><em>Upcoming: '+formatDate(upcomingAssigned[addr.id])+'</em>';
-        } else {
-          popup += '<br><em>Not yet canvassed</em>';
-        }
-        popup += '</div>';
-        return popup;
-      });
-
-      mapMarkers[addr.id] = marker;
-      bounds.push([addr.lat, addr.lng]);
+      if (MULTI_UNIT_TYPES[addrType]) {
+        var key = addr.lat.toFixed(6)+','+addr.lng.toFixed(6);
+        if (!buildingGroups[key]) buildingGroups[key] = [];
+        buildingGroups[key].push(addr);
+      } else {
+        renderSingleMarker(addr, log, isLogged, isUpcoming);
+        bounds.push([addr.lat, addr.lng]);
+      }
     });
+  });
+
+  // Second pass: render one aggregated marker per building group
+  Object.keys(buildingGroups).forEach(function(key) {
+    var units = buildingGroups[key];
+    renderBuildingMarker(units);
+    bounds.push([units[0].lat, units[0].lng]);
   });
 
   Object.keys(typeTally).forEach(function(t){
@@ -388,6 +391,91 @@ function refreshFieldMarkers() {
     fieldMap.fitBounds(bounds, {padding:[20,20]});
     mapNeedsFit = false;
   }
+}
+
+function typeBadgeHtml(addrType) {
+  var meta = PROP_META_FV[addrType];
+  var label = meta ? meta.label : (addrType.charAt(0).toUpperCase()+addrType.slice(1));
+  var color = meta ? meta.color : '#888';
+  return '<span style="display:inline-block;font-size:9px;font-weight:800;color:#fff;background:'+color+';border-radius:6px;padding:2px 7px;margin-top:4px;">'+label+'</span>';
+}
+
+function renderSingleMarker(addr, log, isLogged, isUpcoming) {
+  var isContact = log && log.wantContact;
+  var color, radius, opacity;
+  if (isLogged) { color=RESULT_COLORS[log.contact]||'#888'; radius=5; opacity=1; }
+  else if (isUpcoming) { color='#D4A832'; radius=4; opacity=.7; }
+  else { color='#e0ddd3'; radius=3.5; opacity=.5; }
+
+  var marker = L.circleMarker([addr.lat, addr.lng], {
+    renderer: canvasRenderer,
+    radius: radius,
+    fillColor: color,
+    fillOpacity: opacity,
+    color: isContact ? '#D4A832' : 'rgba(0,0,0,.15)',
+    weight: isContact ? 2.5 : 1,
+  }).addTo(fieldMap);
+
+  marker.bindPopup(function() {
+    var popup = '<div style="min-width:200px;padding:6px 2px;">';
+    popup += '<strong>'+addr.n+' '+addr.s+(addr.u?' - '+addr.u:'')+'</strong>';
+    popup += typeBadgeHtml(addr.t||'house');
+    if (isLogged) {
+      popup += '<div style="margin-top:8px;line-height:1.5;">';
+      popup += '<strong style="color:'+color+';">'+log.contact+'</strong><br>';
+      if (log.name) popup += log.name+(log.phone?' - '+log.phone:'')+'<br>';
+      if (log.wantSign) popup += 'Wants Yard Sign<br>';
+      if (log.wantContact) popup += 'Cassie to Contact<br>';
+      if (log.notes) popup += '<em>'+log.notes+'</em><br>';
+      popup += '</div>';
+      popup += '<button onclick="openFvEdit(\''+addr.id+'\')" style="margin-top:8px;font-size:11px;font-weight:700;padding:6px 12px;background:#D4A832;border:none;border-radius:5px;cursor:pointer;width:100%;">Edit</button>';
+    } else if (isUpcoming) {
+      popup += '<div style="margin-top:8px;"><em>Upcoming: '+formatDate(upcomingAssigned[addr.id])+'</em></div>';
+    } else {
+      popup += '<div style="margin-top:8px;"><em>Not yet canvassed</em></div>';
+    }
+    popup += '</div>';
+    return popup;
+  });
+
+  mapMarkers[addr.id] = marker;
+}
+
+function renderBuildingMarker(units) {
+  var first = units[0];
+  var unitCount = units.length;
+  var loggedUnits = units.filter(function(u){ return !!allLogs[u.id]; });
+  var loggedCount = loggedUnits.length;
+
+  var color, opacity;
+  if (loggedCount === 0) { color = '#e0ddd3'; opacity = .6; }
+  else if (loggedCount < unitCount) { color = '#D4A832'; opacity = .75; }
+  else { color = '#27ae60'; opacity = 1; }
+
+  var radius = 9; // larger — visually distinct as a "building" not a single door
+
+  var marker = L.circleMarker([first.lat, first.lng], {
+    renderer: canvasRenderer,
+    radius: radius,
+    fillColor: color,
+    fillOpacity: opacity,
+    color: 'rgba(0,0,0,.25)',
+    weight: 1.5,
+  }).addTo(fieldMap);
+
+  marker.bindPopup(function() {
+    var popup = '<div style="min-width:210px;padding:6px 2px;">';
+    popup += '<strong>'+first.n+' '+first.s+'</strong>';
+    popup += typeBadgeHtml(first.t||'apartment');
+    popup += '<div style="margin-top:8px;font-size:12px;line-height:1.6;">';
+    popup += '<strong>'+unitCount+' units</strong> &middot; '+loggedCount+' logged<br>';
+    popup += '</div>';
+    popup += '<div style="margin-top:6px;font-size:11px;color:var(--subtle,#a8a49a);">Open this building\'s shift to log or edit individual units.</div>';
+    popup += '</div>';
+    return popup;
+  });
+
+  units.forEach(function(u){ mapMarkers[u.id] = marker; });
 }
 
 function exportList(type) {
