@@ -69,20 +69,66 @@
       <button class="btn btn-ghost btn-sm" id="print-btn" onclick="printWalkSheet()" style="display:none;">🖨 Print Walk Sheet</button>
     </div>
 
-    <!-- Canvasser selector — always visible, works for both assign and results -->
-    <div class="page-card" style="margin-bottom:16px;">
-      <div class="form-row">
-        <div class="form-col">
-          <label class="form-label">Canvasser</label>
-          <select class="form-input" id="canvasser-select" onchange="onCanvasserChange()">
-            <option value="">— Select canvasser —</option>
-          </select>
+    <!-- Plan mode toggle (only relevant for upcoming shifts) -->
+    <div id="plan-mode-toggle" style="display:none;margin-bottom:14px;">
+      <button class="canvasser-tab active" id="mode-direct-btn" onclick="setPlanMode('direct')">Direct Assign</button>
+      <button class="canvasser-tab" id="mode-bucket-btn" onclick="setPlanMode('bucket')">Plan Buckets</button>
+    </div>
+
+    <!-- BUCKET MODE -->
+    <div id="bucket-panel" style="display:none;">
+      <div class="page-card" style="margin-bottom:16px;">
+        <div class="page-card-title">
+          Buckets
+          <button class="btn btn-ghost btn-sm" onclick="newBucket()">+ New Bucket</button>
         </div>
-        <div class="form-col" id="partner-col">
-          <label class="form-label">Partner (gets same route)</label>
-          <select class="form-input" id="assign-partner">
-            <option value="">— No partner —</option>
-          </select>
+        <div id="bucket-list" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+      </div>
+
+      <div class="page-card" id="bucket-editor-card" style="margin-bottom:16px;display:none;">
+        <div class="page-card-title">
+          <span id="bucket-editor-title">Editing Bucket</span>
+          <div style="display:flex;gap:6px;">
+            <input class="form-input" id="bucket-label-input" type="text" placeholder="Bucket name" style="width:auto;padding:5px 10px;font-size:12px;">
+            <button class="btn btn-gold btn-sm" onclick="saveBucket()">Save Bucket</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteBucket()">Delete</button>
+          </div>
+        </div>
+        <div id="bucket-status" style="font-size:12px;color:var(--muted);font-weight:600;margin-bottom:8px;"></div>
+      </div>
+
+      <div class="page-card" style="margin-bottom:16px;">
+        <div class="page-card-title">Assign Buckets to a Canvasser</div>
+        <div class="form-row" style="margin-bottom:10px;">
+          <div class="form-col">
+            <label class="form-label">Canvasser</label>
+            <select class="form-input" id="bucket-assign-canvasser">
+              <option value="">— Select canvasser —</option>
+            </select>
+          </div>
+        </div>
+        <label class="form-label">Combine Buckets</label>
+        <div id="bucket-assign-checklist" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;"></div>
+        <button class="btn btn-gold btn-sm" onclick="assignBucketsToCanvasser()">Assign Combined Route</button>
+      </div>
+    </div>
+
+    <!-- DIRECT ASSIGN MODE (existing flow) -->
+    <div id="direct-panel">
+      <div class="page-card" style="margin-bottom:16px;">
+        <div class="form-row">
+          <div class="form-col">
+            <label class="form-label">Canvasser</label>
+            <select class="form-input" id="canvasser-select" onchange="onCanvasserChange()">
+              <option value="">— Select canvasser —</option>
+            </select>
+          </div>
+          <div class="form-col" id="partner-col">
+            <label class="form-label">Partner (gets same route)</label>
+            <select class="form-input" id="assign-partner">
+              <option value="">— No partner —</option>
+            </select>
+          </div>
         </div>
       </div>
     </div>
@@ -162,6 +208,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
 <script src="/field-app/js/firebase.js"></script>
 <script src="/field-app/js/auth.js"></script>
 <script src="/field-app/js/data.js"></script>
@@ -172,18 +219,24 @@ var shiftMap = null, mapMarkers = {};
 var currentCanvasserId = '';
 var adminAddresses = [], adminSelected = {}, adminRoute = [];
 var everVisited = {};
+var planMode = 'direct'; // 'direct' | 'bucket'
+var buckets = {};
+var currentBucketId = null;
 var isPastShift = false;
 var mapNeedsFit = true;
 var _dragId = null;
 
 var PROP_META = {
-  house:          {label:'House',            color:'#27ae60'},
+  house:          {label:'House',             color:'#27ae60'},
+  townhome:       {label:'Townhome',          color:'#16a34a'},
+  'multi-family': {label:'Multi-Family',      color:'#0d9488'},
   condo:          {label:'Condo',             color:'#0891b2'},
   apartment:      {label:'Apartment',         color:'#2563eb'},
   senior:         {label:'55+ Community',     color:'#d97706'},
   mobile:         {label:'Mobile Home Park',  color:'#7c3aed'},
   assisted:       {label:'Assisted Living',   color:'#e67e22'},
   'skilled-nursing': {label:'Skilled Nursing',color:'#dc2626'},
+  church:         {label:'Church',            color:'#a8a49a'},
 };
 var RESULT_COLORS = {
   'Not Home':'#64748b','Vacant':'#94a3b8','For Sale':'#7c3aed',
@@ -210,15 +263,22 @@ function loadShift() {
     document.getElementById('shift-title').textContent = formatDate(shiftDate)+' — '+hoodName;
     isPastShift = shiftDate < new Date().toISOString().slice(0,10);
     document.getElementById('shift-sub').textContent = isPastShift ? 'Past shift' : 'Upcoming shift';
+    document.getElementById('plan-mode-toggle').style.display = isPastShift ? 'none' : 'block';
+    if (isPastShift) {
+      document.getElementById('bucket-panel').style.display = 'none';
+      document.getElementById('direct-panel').style.display = 'block';
+    }
     adminAddresses = (window.NEIGHBORHOOD_DATA&&window.NEIGHBORHOOD_DATA[shiftData.neighborhood])||[];
 
     Promise.all([
       fbGet('/'+shiftData.neighborhood+'/assignments/'+shiftDate),
       fbGet('/'+shiftData.neighborhood+'/logs/'+shiftDate),
       fbGet('/'+shiftData.neighborhood+'/logs'),
+      fbGet('/'+shiftData.neighborhood+'/buckets/'+shiftDate),
     ]).then(function(r2) {
       allAssignments = r2[0] || {};
       allLogs = r2[1] || {};
+      buckets = r2[3] || {};
       // Build set of addresses ever visited (any date, any canvasser) for this neighborhood
       everVisited = {};
       var allDatesLogs = r2[2] || {};
@@ -323,6 +383,152 @@ function onCanvasserChange() {
   setTimeout(function(){ initOrRefreshMap(); renderAddrList(); }, 30);
 }
 
+// ── BUCKET PLANNING ──────────────────────────────────────────────────────────
+function setPlanMode(mode) {
+  planMode = mode;
+  document.getElementById('mode-direct-btn').classList.toggle('active', mode==='direct');
+  document.getElementById('mode-bucket-btn').classList.toggle('active', mode==='bucket');
+  document.getElementById('direct-panel').style.display = mode==='direct' ? 'block' : 'none';
+  document.getElementById('bucket-panel').style.display = mode==='bucket' ? 'block' : 'none';
+
+  if (mode === 'bucket') {
+    currentCanvasserId = '';
+    currentBucketId = null;
+    document.getElementById('main-grid').style.display = 'none';
+    document.getElementById('no-canvasser').style.display = 'none';
+    document.getElementById('route-status-bar').style.display = 'none';
+    populateBucketCanvasserSelect();
+    renderBucketList();
+    renderBucketAssignChecklist();
+  } else {
+    document.getElementById('no-canvasser').style.display = 'block';
+  }
+}
+
+function populateBucketCanvasserSelect() {
+  var sel = document.getElementById('bucket-assign-canvasser');
+  if (!sel) return;
+  var vols = (shiftData.volunteers||[]).length ? shiftData.volunteers : activeVols().map(function(v){return v.id;});
+  sel.innerHTML = '<option value="">— Select canvasser —</option>';
+  vols.forEach(function(id){ sel.innerHTML += '<option value="'+id+'">'+volName(id)+'</option>'; });
+}
+
+function renderBucketList() {
+  var el = document.getElementById('bucket-list');
+  var ids = Object.keys(buckets);
+  if (!ids.length) {
+    el.innerHTML = '<div style="color:var(--subtle);font-size:13px;">No buckets yet \u2014 click + New Bucket to start planning zones.</div>';
+    return;
+  }
+  el.innerHTML = ids.map(function(id){
+    var b = buckets[id];
+    var count = (b.route||[]).length;
+    var active = id === currentBucketId;
+    return '<div class="bucket-chip" data-bid="'+id+'" onclick="editBucket(this.dataset.bid)" style="padding:8px 14px;border-radius:8px;cursor:pointer;'
+      +'border:2px solid '+(active?'var(--gold)':'var(--border)')+';background:'+(active?'#fdf6e0':'var(--white)')+';">'
+      +'<div style="font-size:12px;font-weight:700;">'+(b.label||'Untitled Bucket')+'</div>'
+      +'<div style="font-size:10px;color:var(--subtle);">'+count+' addresses</div>'
+      +'</div>';
+  }).join('');
+}
+function newBucket() {
+  var id = 'bucket_' + Date.now();
+  var n = Object.keys(buckets).length + 1;
+  buckets[id] = { label: 'Bucket ' + n, route: [], assignments: {} };
+  editBucket(id);
+  renderBucketList();
+}
+
+function editBucket(id) {
+  currentBucketId = id;
+  var b = buckets[id];
+  if (!b) return;
+
+  adminRoute = (b.route||[]).slice();
+  adminSelected = Object.assign({}, b.assignments||{});
+
+  document.getElementById('bucket-editor-card').style.display = 'block';
+  document.getElementById('bucket-editor-title').textContent = 'Editing: ' + (b.label||'Bucket');
+  document.getElementById('bucket-label-input').value = b.label || '';
+  document.getElementById('bucket-status').textContent = adminRoute.length + ' addresses selected';
+
+  document.getElementById('main-grid').style.display = 'grid';
+  document.getElementById('no-canvasser').style.display = 'none';
+  mapNeedsFit = true;
+
+  renderBucketList();
+  setTimeout(function(){ initOrRefreshMap(); renderAddrList(); }, 30);
+}
+
+function saveBucket() {
+  if (!currentBucketId) return;
+  var label = document.getElementById('bucket-label-input').value.trim() || 'Untitled Bucket';
+  buckets[currentBucketId] = { label: label, route: adminRoute.slice(), assignments: Object.assign({}, adminSelected) };
+  fbPut('/'+shiftData.neighborhood+'/buckets/'+shiftDate+'/'+currentBucketId, buckets[currentBucketId]).then(function(){
+    showToast('Bucket saved: '+label);
+    renderBucketList();
+    renderBucketAssignChecklist();
+  }).catch(function(){ showToast('Save failed'); });
+}
+
+function deleteBucket() {
+  if (!currentBucketId) return;
+  var label = (buckets[currentBucketId]||{}).label || 'this bucket';
+  if (!confirm('Delete '+label+'? This does not affect any canvasser already assigned from it.')) return;
+  fbPut('/'+shiftData.neighborhood+'/buckets/'+shiftDate+'/'+currentBucketId, null).then(function(){
+    delete buckets[currentBucketId];
+    currentBucketId = null;
+    adminRoute = []; adminSelected = {};
+    document.getElementById('bucket-editor-card').style.display = 'none';
+    document.getElementById('main-grid').style.display = 'none';
+    document.getElementById('no-canvasser').style.display = 'block';
+    renderBucketList();
+    renderBucketAssignChecklist();
+    showToast('Bucket deleted');
+  }).catch(function(){ showToast('Delete failed'); });
+}
+
+function renderBucketAssignChecklist() {
+  var el = document.getElementById('bucket-assign-checklist');
+  var ids = Object.keys(buckets);
+  if (!ids.length) {
+    el.innerHTML = '<div style="color:var(--subtle);font-size:12px;">No buckets to assign yet.</div>';
+    return;
+  }
+  el.innerHTML = ids.map(function(id){
+    var b = buckets[id];
+    var count = (b.route||[]).length;
+    return '<label style="display:flex;align-items:center;gap:6px;padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">'
+      +'<input type="checkbox" class="bucket-assign-cb" value="'+id+'"> '+(b.label||'Untitled')+' <span style="color:var(--subtle);font-weight:400;">('+count+')</span>'
+      +'</label>';
+  }).join('');
+}
+
+function assignBucketsToCanvasser() {
+  var volId = document.getElementById('bucket-assign-canvasser').value;
+  if (!volId) { showToast('Select a canvasser'); return; }
+  var checked = Array.from(document.querySelectorAll('.bucket-assign-cb:checked')).map(function(el){return el.value;});
+  if (!checked.length) { showToast('Select at least one bucket'); return; }
+
+  var mergedRoute = [];
+  var mergedSelected = {};
+  var seen = {};
+  checked.forEach(function(bid){
+    var b = buckets[bid];
+    if (!b) return;
+    (b.route||[]).forEach(function(addrId){
+      if (!seen[addrId]) { seen[addrId] = true; mergedRoute.push(addrId); }
+    });
+    Object.assign(mergedSelected, b.assignments||{});
+  });
+
+  var payload = { route: mergedRoute, assignments: mergedSelected };
+  fbPut('/'+shiftData.neighborhood+'/assignments/'+shiftDate+'/'+volId, payload).then(function(){
+    allAssignments[volId] = payload;
+    showToast('Assigned '+mergedRoute.length+' addresses to '+volName(volId));
+  }).catch(function(){ showToast('Assign failed'); });
+}
+
 function renderStats() {
   var volLogs = allLogs[currentCanvasserId] || {};
   var logs = Object.values(volLogs);
@@ -358,7 +564,7 @@ function initOrRefreshMap() {
   if (!shiftMap) {
     shiftMap = L.map('shift-map').setView([45.017,-93.153], 15);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-      attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
+      attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20,crossOrigin:true
     }).addTo(shiftMap);
   }
   shiftMap.invalidateSize();
@@ -625,6 +831,17 @@ function deleteShift() {
 
 function printWalkSheet() {
   if (!adminRoute.length) { showToast('No addresses in route'); return; }
+
+  // Open the print window synchronously (right in the click handler) so
+  // popup blockers don't kill it — we fill in the content once the map
+  // screenshot is ready, which happens asynchronously.
+  var printWin = window.open('', '_blank');
+  if (printWin) {
+    printWin.document.write('<html><body style="font-family:sans-serif;padding:40px;color:#6b6860;">Generating walk sheet&hellip;</body></html>');
+  } else {
+    showToast('Allow popups to print');
+  }
+
   var addrMap={};
   adminAddresses.forEach(function(a){addrMap[a.id]=a;});
   var sorted = adminRoute.filter(function(id){return !!addrMap[id];}).map(function(id){return addrMap[id];});
@@ -675,6 +892,7 @@ function printWalkSheet() {
     +'<div class="page">'
     +'<div class="hdr"><div class="hdr-l"><div class="camp">Cassie for Roseville &mdash; Field App</div><div class="title">Walk Sheet: '+names+'</div><div class="meta">'+hoodName+' &middot; '+formatDateLong(shiftDate)+'</div></div>'
     +'<div class="hdr-r"><div class="cnt">'+sorted.length+'</div><div class="lbl">Addresses</div></div></div>'
+    +'%%MAP_IMAGE%%'
     +'<div style="margin-bottom:10px;display:flex;align-items:center;gap:12px;padding:8px;border:1px solid #e0ddd3;border-radius:6px;background:#faf8f4;">'
       +'<img src="'+qrUrl+'" style="width:80px;height:80px;flex-shrink:0;" />'
       +'<div style="font-size:8pt;color:#4b463a;">'
@@ -687,13 +905,32 @@ function printWalkSheet() {
     +'<div class="footer"><span>Cassie Iverson for Roseville City Council 2026 &middot; cassie4roseville.com</span><span>Printed '+new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</span></div>'
     +'</div><script>window.onload=function(){window.print();};<\/script></body></html>';
 
-  try {
-    var blob=new Blob([body],{type:'text/html'});
-    var url=URL.createObjectURL(blob);
-    var w=window.open(url,'_blank');
-    if(!w) showToast('Allow popups to print');
-    setTimeout(function(){URL.revokeObjectURL(url);},60000);
-  } catch(e){showToast('Print error: '+e.message);}
+  function finishPrint(mapImgHtml) {
+    var fullBody = body.replace('%%MAP_IMAGE%%', mapImgHtml || '');
+    if (printWin) {
+      printWin.document.open();
+      printWin.document.write(fullBody);
+      printWin.document.close();
+    }
+  }
+
+  // Capture the live route map (with numbered pins, as currently zoomed/panned)
+  var mapEl = document.getElementById('shift-map');
+  if (mapEl && typeof html2canvas === 'function') {
+    html2canvas(mapEl, {useCORS:true, logging:false, backgroundColor:'#f0ede4'}).then(function(canvas) {
+      var dataUrl = canvas.toDataURL('image/png');
+      var mapImgHtml = '<div style="margin-bottom:10px;">'
+        +'<img src="'+dataUrl+'" style="width:100%;height:auto;border:1px solid #e0ddd3;border-radius:4px;display:block;" />'
+        +'<div style="font-size:7pt;color:#a8a49a;text-align:center;margin-top:2px;">Route map &middot; numbers correspond to list below</div>'
+        +'</div>';
+      finishPrint(mapImgHtml);
+    }).catch(function(e) {
+      // Map capture failed (e.g. tile CORS issue) — print without it rather than fail entirely
+      finishPrint('');
+    });
+  } else {
+    finishPrint('');
+  }
 }
 
 var _tt;
