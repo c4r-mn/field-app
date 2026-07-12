@@ -434,3 +434,8 @@ body{padding-top:36px;} /* account for user bar */
   background:var(--white);color:var(--muted);font-family:'Outfit',sans-serif;font-size:14px;
   font-weight:700;cursor:pointer;transition:all .15s;}
 .door-cancel-btn:hover{border-color:var(--gold);color:var(--text);}
+
+/* Filter pill count badges */
+.pill-count{display:inline-block;background:rgba(0,0,0,.12);border-radius:8px;
+  padding:1px 6px;font-size:10px;font-weight:800;margin-left:3px;}
+.filter-pill.active .pill-count{background:rgba(0,0,0,.18);}
