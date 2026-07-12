@@ -397,7 +397,7 @@ function typeBadgeHtml(addrType) {
   var meta = PROP_META_FV[addrType];
   var label = meta ? meta.label : (addrType.charAt(0).toUpperCase()+addrType.slice(1));
   var color = meta ? meta.color : '#888';
-  return '<span style="display:inline-block;font-size:9px;font-weight:800;color:#fff;background:'+color+';border-radius:6px;padding:2px 7px;margin-top:4px;">'+label+'</span>';
+  return '<span style="display:inline-block;font-size:9px;font-weight:800;color:#fff;background:'+color+';border-radius:6px;padding:2px 7px;margin-top:4px;maring-left: 2px">'+label+'</span>';
 }
 
 function renderSingleMarker(addr, log, isLogged, isUpcoming) {
