@@ -54,6 +54,10 @@
     </div>
 
     <div class="field-filters">
+      <span style="font-size:11px;font-weight:700;color:var(--muted);">Neighborhood:</span>
+      <select id="hood-select" class="form-input" style="width:auto;padding:5px 10px;font-size:12px;" onchange="setHoodFilter(this.value)">
+        <option value="all">All Neighborhoods (slower)</option>
+      </select>
       <span style="font-size:11px;font-weight:700;color:var(--muted);">Date:</span>
       <select id="date-select" class="form-input" style="width:auto;padding:5px 10px;font-size:12px;" onchange="setDateFilter(this.value)">
         <option value="all">All Dates</option>
@@ -108,6 +112,8 @@ var upcomingAssigned = {};
 var canvassDays = {};
 var roster = {};
 var activeDate = 'all';
+var activeHood = 'all';
+var canvasRenderer = null;
 var showFilters = {completed:true,'not-knocked':true,upcoming:true,nosolic:true,contact:true};
 var typeFilters = {house:true,condo:true,apartment:true,senior:true,assisted:true,'skilled-nursing':true,mobile:true};
 var mapMarkers = {};
@@ -212,6 +218,21 @@ function loadFieldData() {
       });
     }
 
+    var hoodSel = document.getElementById('hood-select');
+    if (hoodSel) {
+      (window.NEIGHBORHOODS||[]).forEach(function(n) {
+        var o = document.createElement('option');
+        o.value = n.key; o.textContent = n.displayName;
+        hoodSel.appendChild(o);
+      });
+      // Default to Hamline (or first neighborhood) instead of "All" for performance —
+      // "All Neighborhoods" with 14,000+ addresses is slow; most days you're working one area.
+      if (window.NEIGHBORHOODS && window.NEIGHBORHOODS.length) {
+        activeHood = window.NEIGHBORHOODS[0].key;
+        hoodSel.value = activeHood;
+      }
+    }
+
     hoodResults.forEach(function(hood) {
       var logs = hood.logs || {};
       var assigns = hood.assignments || {};
@@ -255,23 +276,26 @@ function initFieldMap() {
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 20
   }).addTo(fieldMap);
-  var allAddrs = [];
-  (window.NEIGHBORHOODS||[]).forEach(function(n) {
-    allAddrs = allAddrs.concat(window.NEIGHBORHOOD_DATA[n.key]||[]);
-  });
-  if (allAddrs.length) {
-    var lats = allAddrs.map(function(a){ return a.lat; });
-    var lngs = allAddrs.map(function(a){ return a.lng; });
-    fieldMap.fitBounds([
-      [Math.min.apply(null,lats),Math.min.apply(null,lngs)],
-      [Math.max.apply(null,lats),Math.max.apply(null,lngs)]
-    ], {padding:[20,20]});
-  }
+  // Canvas renderer draws all points to one canvas element instead of
+  // creating a separate DOM node per marker — dramatically faster at scale.
+  canvasRenderer = L.canvas({ padding: 0.5 });
+  mapNeedsFit = true;
   refreshFieldMarkers();
+}
+
+function activeNeighborhoods() {
+  if (activeHood === 'all') return window.NEIGHBORHOODS || [];
+  return (window.NEIGHBORHOODS || []).filter(function(n){ return n.key === activeHood; });
 }
 
 function setDateFilter(date) {
   activeDate = date;
+  refreshFieldMarkers();
+}
+
+function setHoodFilter(hood) {
+  activeHood = hood;
+  mapNeedsFit = true;
   refreshFieldMarkers();
 }
 
@@ -293,7 +317,9 @@ function refreshFieldMarkers() {
   if (!fieldMap) return;
   Object.values(mapMarkers).forEach(function(m){ fieldMap.removeLayer(m); });
   mapMarkers = {};
-  (window.NEIGHBORHOODS||[]).forEach(function(n) {
+  var bounds = [];
+
+  activeNeighborhoods().forEach(function(n) {
     (window.NEIGHBORHOOD_DATA[n.key]||[]).forEach(function(addr) {
       var log = allLogs[addr.id];
       var isLogged = !!log;
@@ -306,36 +332,53 @@ function refreshFieldMarkers() {
       if (isLogged && !isNoSolic && !showFilters.completed) return;
       if (!isLogged && isUpcoming && !showFilters.upcoming) return;
       if (!isLogged && !isUpcoming && !showFilters['not-knocked']) return;
-      var color, size, opacity;
-      if (isLogged) { color=RESULT_COLORS[log.contact]||'#888'; size=10; opacity=1; }
-      else if (isUpcoming) { color='#D4A832'; size=8; opacity=.7; }
-      else { color='#e0ddd3'; size=7; opacity=.5; }
-      var star = isContact ? '<span style="position:absolute;top:-6px;right:-4px;font-size:9px;color:#D4A832;">*</span>' : '';
-      var html = '<div style="position:relative;width:'+size+'px;height:'+size+'px;background:'+color+
-        ';border-radius:50%;border:1.5px solid rgba(0,0,0,.15);opacity:'+opacity+
-        ';box-shadow:0 1px 3px rgba(0,0,0,.2);">'+star+'</div>';
-      var icon = L.divIcon({className:'', html:html, iconSize:[size,size], iconAnchor:[size/2,size/2]});
-      var popup = '<div style="min-width:190px;">';
-      popup += '<strong>'+addr.n+' '+addr.s+(addr.u?' - '+addr.u:'')+'</strong>';
-      if (isLogged) {
-        popup += '<div style="margin-top:4px;">';
-        popup += '<strong style="color:'+color+';">'+log.contact+'</strong><br>';
-        if (log.name) popup += log.name+(log.phone?' - '+log.phone:'')+'<br>';
-        if (log.wantSign) popup += 'Wants Yard Sign<br>';
-        if (log.wantContact) popup += 'Cassie to Contact<br>';
-        if (log.notes) popup += '<em>'+log.notes+'</em><br>';
+
+      var color, radius, opacity;
+      if (isLogged) { color=RESULT_COLORS[log.contact]||'#888'; radius=5; opacity=1; }
+      else if (isUpcoming) { color='#D4A832'; radius=4; opacity=.7; }
+      else { color='#e0ddd3'; radius=3.5; opacity=.5; }
+
+      // Fast canvas-rendered circle marker instead of a DOM-based divIcon —
+      // this is what makes large neighborhoods (thousands of points) responsive.
+      var marker = L.circleMarker([addr.lat, addr.lng], {
+        renderer: canvasRenderer,
+        radius: radius,
+        fillColor: color,
+        fillOpacity: opacity,
+        color: isContact ? '#D4A832' : 'rgba(0,0,0,.15)',
+        weight: isContact ? 2.5 : 1,
+      }).addTo(fieldMap);
+
+      marker.bindPopup(function() {
+        var popup = '<div style="min-width:190px;">';
+        popup += '<strong>'+addr.n+' '+addr.s+(addr.u?' - '+addr.u:'')+'</strong>';
+        if (isLogged) {
+          popup += '<div style="margin-top:4px;">';
+          popup += '<strong style="color:'+color+';">'+log.contact+'</strong><br>';
+          if (log.name) popup += log.name+(log.phone?' - '+log.phone:'')+'<br>';
+          if (log.wantSign) popup += 'Wants Yard Sign<br>';
+          if (log.wantContact) popup += 'Cassie to Contact<br>';
+          if (log.notes) popup += '<em>'+log.notes+'</em><br>';
+          popup += '</div>';
+          popup += '<button onclick="openFvEdit(\''+addr.id+'\')" style="margin-top:6px;font-size:11px;font-weight:700;padding:5px 12px;background:#D4A832;border:none;border-radius:5px;cursor:pointer;width:100%;">Edit</button>';
+        } else if (isUpcoming) {
+          popup += '<br><em>Upcoming: '+formatDate(upcomingAssigned[addr.id])+'</em>';
+        } else {
+          popup += '<br><em>Not yet canvassed</em>';
+        }
         popup += '</div>';
-        popup += '<button onclick="openFvEdit(\''+addr.id+'\')" style="margin-top:6px;font-size:11px;font-weight:700;padding:5px 12px;background:#D4A832;border:none;border-radius:5px;cursor:pointer;width:100%;">Edit</button>';
-      } else if (isUpcoming) {
-        popup += '<br><em>Upcoming: '+formatDate(upcomingAssigned[addr.id])+'</em>';
-      } else {
-        popup += '<br><em>Not yet canvassed</em>';
-      }
-      popup += '</div>';
-      var marker = L.marker([addr.lat,addr.lng],{icon:icon}).bindPopup(popup).addTo(fieldMap);
+        return popup;
+      });
+
       mapMarkers[addr.id] = marker;
+      bounds.push([addr.lat, addr.lng]);
     });
   });
+
+  if (bounds.length && mapNeedsFit) {
+    fieldMap.fitBounds(bounds, {padding:[20,20]});
+    mapNeedsFit = false;
+  }
 }
 
 function exportList(type) {
