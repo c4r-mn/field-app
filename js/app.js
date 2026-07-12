@@ -3,13 +3,19 @@
 
 
 var PROP_META = {
-  house:     { label:'House',            color:'#27ae60', callout:null },
-  condo:     { label:'Condo',            color:'#0891b2', callout:null },
-  apartment: { label:'Apartment',        color:'#2563eb', callout:{cls:'apartment',icon:'🏢',text:'Apartment building — coordinate with management before knocking.'} },
-  senior:    { label:'55+ Community',    color:'#d97706', callout:{cls:'senior',icon:'🏛',text:'55+ community — call residents or management before visiting.'} },
-  mobile:    { label:'Mobile Home Park', color:'#7c3aed', callout:{cls:'mobile',icon:'🏘',text:'Mobile home park — coordinate with park management first.'} },
-  assisted:  { label:'Assisted Living',  color:'#e67e22', callout:{cls:'assisted',icon:'🏥',text:'Assisted living — call before any visit.'} },
+  house:      { label:'House',              color:'#27ae60', callout:null },
+  townhome:   { label:'Townhome',           color:'#16a34a', callout:null },
+  'twin-home':{ label:'Twin Home',          color:'#65a30d', callout:null },
+  duplex:     { label:'Duplex',             color:'#0d9488', callout:null },
+  triplex:    { label:'Triplex',            color:'#0891b2', callout:null },
+  quadplex:   { label:'Quadplex',           color:'#0369a1', callout:null },
+  condo:      { label:'Condo',              color:'#0891b2', callout:null },
+  apartment:  { label:'Apartment',          color:'#2563eb', callout:{cls:'apartment',icon:'🏢',text:'Apartment building — coordinate with management before knocking.'} },
+  senior:     { label:'55+ Community',      color:'#d97706', callout:{cls:'senior',icon:'🏛',text:'55+ community — call residents or management before visiting.'} },
+  mobile:     { label:'Mobile Home Park',   color:'#7c3aed', callout:{cls:'mobile',icon:'🏘',text:'Mobile home park — coordinate with park management first.'} },
+  assisted:   { label:'Assisted Living',    color:'#e67e22', callout:{cls:'assisted',icon:'🏥',text:'Assisted living — call before any visit.'} },
   'skilled-nursing': { label:'Skilled Nursing', color:'#dc2626', callout:{cls:'nursing',icon:'🏥',text:'Skilled nursing facility — call before any visit.'} },
+  church:     { label:'Church',             color:'#a8a49a', callout:{cls:'church',icon:'⛪',text:'This is a place of worship, not a residence — do not canvass.'} },
 };
 
 var CONTACT_COLORS = {
