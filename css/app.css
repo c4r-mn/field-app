@@ -1,441 +1,581 @@
-/* Cassie for Roseville — Field App Styles */
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Field View — Cassie for Roseville Field App</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/app.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
+</head>
+<body>
 
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
+<div id="user-bar">
+  <span id="user-bar-name"></span>
+  <div class="user-bar-right">
+    <button class="signout-btn" onclick="doSignOut()">Sign Out</button>
+  </div>
+</div>
 
-:root{
-  --cream:#F5F0E8;--white:#fff;--black:#1A1A1A;
-  --gold:#D4A832;--gold-acc:#9A7215;
-  --border:#e0ddd3;--light:#f0ede4;--mid:#d8d4c8;
-  --text:#1A1A1A;--muted:#6b6860;--subtle:#a8a49a;
-  --red:#BF1E2E;--green:#27ae60;
-  --prop-house:#27ae60;--prop-senior:#d97706;
-  --prop-apartment:#2563eb;--prop-mobile:#7c3aed;
-}
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-html,body{height:100%;font-family:'Outfit',sans-serif;background:var(--cream);color:var(--text);}
-#app{display:flex;flex-direction:column;height:100vh;}
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <div class="admin-sidebar-brand">
+      <img src="../assets/logo-horizontal.png" alt="Cassie Iverson for Roseville City Council" style="width:100%;max-width:180px;height:auto;">
+      <div class="brand-sub" style="margin-top:6px;">Field Operations Admin</div>
+    </div>
+    <nav class="admin-nav">
+      <div class="admin-nav-section">Overview</div>
+      <a href="/field-app/admin/index.html" class="admin-nav-link"><span class="admin-nav-icon">🗺</span> Dashboard</a>
+      <div class="admin-nav-section">Operations</div>
+      <a href="/field-app/admin/shifts.html" class="admin-nav-link"><span class="admin-nav-icon">📅</span> Shifts</a>
+      <a href="/field-app/admin/roster.html" class="admin-nav-link"><span class="admin-nav-icon">👥</span> Roster</a>
+      <div class="admin-nav-section">Field</div>
+      <a href="/field-app/admin/field.html" class="admin-nav-link active"><span class="admin-nav-icon">📍</span> Field View</a>
+    </nav>
+  </aside>
+  <div class="mobile-nav">
+    <a href="/field-app/admin/index.html" class="mobile-nav-link">Dashboard</a>
+    <a href="/field-app/admin/shifts.html" class="mobile-nav-link">Shifts</a>
+    <a href="/field-app/admin/roster.html" class="mobile-nav-link">Roster</a>
+    <a href="/field-app/admin/field.html" class="mobile-nav-link active">Field View</a>
+  </div>
+  <main class="admin-content" style="padding-bottom:0;">
 
-#topbar{background:var(--white);border-bottom:3px solid var(--gold);padding:8px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index:800;box-shadow:0 2px 8px rgba(0,0,0,.08);}
-.topbar-brand{font-size:14px;font-weight:800;color:var(--gold-acc);}
-.topbar-sub{font-size:10px;color:var(--subtle);}
-#mode-toggle{display:flex;background:var(--light);border-radius:20px;padding:3px;gap:2px;border:1px solid var(--border);}
-.mode-btn{padding:5px 14px;border-radius:16px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:'Outfit',sans-serif;transition:all .15s;}
-.mode-btn.active{background:var(--gold);color:var(--black);}
-#user-badge{font-size:11px;color:var(--gold-acc);font-weight:700;cursor:pointer;border:1px solid var(--gold);border-radius:12px;padding:4px 10px;white-space:nowrap;background:var(--cream);}
+    <div class="admin-page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px;">
+      <div>
+        <div class="admin-page-title">Field View</div>
+        <div class="admin-page-sub" id="field-sub">Loading...</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" onclick="exportList('contact')">Cassie to Contact CSV</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportList('signs')">Yard Signs CSV</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportList('nosolic')">No Soliciting CSV</button>
+      </div>
+    </div>
 
-#main{display:flex;flex:1;overflow:hidden;position:relative;}
-#map{flex:1;height:100%;}
-#sidebar{width:320px;background:var(--white);border-left:2px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;}
-#tabs{display:flex;border-bottom:2px solid var(--border);flex-shrink:0;background:var(--white);}
-.tab{flex:1;padding:10px 0;text-align:center;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--subtle);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;}
-.tab.active{color:var(--gold-acc);border-bottom-color:var(--gold);}
-.panel{display:none;flex:1;overflow-y:auto;flex-direction:column;}
-.panel.active{display:flex;}
+    <div class="field-filters">
+      <span style="font-size:11px;font-weight:700;color:var(--muted);">Neighborhood:</span>
+      <select id="hood-select" class="form-input" style="width:auto;padding:5px 10px;font-size:12px;" onchange="setHoodFilter(this.value)">
+        <option value="all">All Neighborhoods (slower)</option>
+      </select>
+      <span style="font-size:11px;font-weight:700;color:var(--muted);">Date:</span>
+      <select id="date-select" class="form-input" style="width:auto;padding:5px 10px;font-size:12px;" onchange="setDateFilter(this.value)">
+        <option value="all">All Dates</option>
+      </select>
+      <span style="font-size:11px;font-weight:700;color:var(--muted);margin-left:8px;">Show:</span>
+      <div class="filter-pill active" data-show="completed" onclick="toggleShow('completed')">Completed</div>
+      <div class="filter-pill active" data-show="not-knocked" onclick="toggleShow('not-knocked')">Not Knocked</div>
+      <div class="filter-pill active" data-show="upcoming" onclick="toggleShow('upcoming')">Upcoming</div>
+      <div class="filter-pill active" data-show="nosolic" onclick="toggleShow('nosolic')">No Soliciting</div>
+      <div class="filter-pill active" data-show="contact" onclick="toggleShow('contact')">Cassie to Contact</div>
+    </div>
 
-#filter-bar{padding:10px 12px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:6px;flex-wrap:wrap;background:var(--white);}
-#search-input{width:100%;background:var(--light);border:1px solid var(--border);color:var(--text);font-family:'Outfit',sans-serif;font-size:13px;padding:7px 12px;border-radius:6px;outline:none;margin-bottom:6px;}
-#search-input:focus{border-color:var(--gold);}
-.filter-chip{padding:4px 10px;border-radius:12px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:var(--white);color:var(--muted);transition:all .15s;white-space:nowrap;}
-.filter-chip.active[data-f="all"]{background:var(--black);color:var(--white);border-color:transparent;}
-.filter-chip.active[data-f="house"]{background:var(--prop-house);color:var(--white);border-color:transparent;}
-.filter-chip.active[data-f="apartment"]{background:var(--prop-apartment);color:var(--white);border-color:transparent;}
-.filter-chip.active[data-f="senior"]{background:var(--prop-senior);color:var(--white);border-color:transparent;}
-.filter-chip.active[data-f="mobile"]{background:var(--prop-mobile);color:var(--white);border-color:transparent;}
+    <div class="field-filters" style="margin-top:6px;">
+      <span style="font-size:11px;font-weight:700;color:var(--muted);">Type:</span>
+      <div class="filter-pill active" data-type="house" onclick="toggleType('house')">House <span class="pill-count" id="count-house">0</span></div>
+      <div class="filter-pill active" data-type="townhome" onclick="toggleType('townhome')">Townhome <span class="pill-count" id="count-townhome">0</span></div>
+      <div class="filter-pill active" data-type="twin-home" onclick="toggleType('twin-home')">Twin Home <span class="pill-count" id="count-twin-home">0</span></div>
+      <div class="filter-pill active" data-type="duplex" onclick="toggleType('duplex')">Duplex <span class="pill-count" id="count-duplex">0</span></div>
+      <div class="filter-pill active" data-type="triplex" onclick="toggleType('triplex')">Triplex <span class="pill-count" id="count-triplex">0</span></div>
+      <div class="filter-pill active" data-type="quadplex" onclick="toggleType('quadplex')">Quadplex <span class="pill-count" id="count-quadplex">0</span></div>
+      <div class="filter-pill active" data-type="condo" onclick="toggleType('condo')">Condo <span class="pill-count" id="count-condo">0</span></div>
+      <div class="filter-pill active" data-type="apartment" onclick="toggleType('apartment')">Apartment <span class="pill-count" id="count-apartment">0</span></div>
+      <div class="filter-pill active" data-type="senior" onclick="toggleType('senior')">55+ Community <span class="pill-count" id="count-senior">0</span></div>
+      <div class="filter-pill active" data-type="assisted" onclick="toggleType('assisted')">Assisted Living <span class="pill-count" id="count-assisted">0</span></div>
+      <div class="filter-pill active" data-type="skilled-nursing" onclick="toggleType('skilled-nursing')">Skilled Nursing <span class="pill-count" id="count-skilled-nursing">0</span></div>
+      <div class="filter-pill active" data-type="mobile" onclick="toggleType('mobile')">Mobile Home Park <span class="pill-count" id="count-mobile">0</span></div>
+      <div class="filter-pill active" data-type="church" onclick="toggleType('church')">Church (skip) <span class="pill-count" id="count-church">0</span></div>
+    </div>
 
-#addr-list{flex:1;overflow-y:auto;}
-.addr-item{display:flex;align-items:center;gap:9px;padding:10px 14px;border-bottom:1px solid #f0ede4;cursor:pointer;transition:background .1s;}
-.addr-item:hover{background:var(--light);}
-.addr-item.is-mine{border-left:3px solid var(--gold);padding-left:11px;}
-.addr-item.selected{background:#fdf6e0;}
-.addr-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;border:1.5px solid rgba(0,0,0,.1);}
-.addr-info{flex:1;min-width:0;}
-.addr-street{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.addr-meta{font-size:10px;color:var(--subtle);margin-top:1px;}
-.addr-badge{font-size:10px;font-weight:700;padding:2px 6px;border-radius:8px;white-space:nowrap;flex-shrink:0;}
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;font-weight:600;color:var(--muted);align-items:center;">
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#27ae60;margin-right:4px;"></span>Accepted</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#64748b;margin-right:4px;"></span>Not Home</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#c0392b;margin-right:4px;"></span>Refused</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#92400e;margin-right:4px;"></span>No Soliciting</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#e0ddd3;border:1px solid #aaa;margin-right:4px;"></span>Not Knocked</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#D4A832;margin-right:4px;"></span>Upcoming</span>
+      <span style="color:#D4A832;">* = Cassie to Contact</span>
+    </div>
 
-.log-item{padding:11px 14px;border-bottom:1px solid #f0ede4;cursor:pointer;}
-.log-item:hover{background:var(--light);}
-.log-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:2px;}
-.log-addr{font-size:13px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.log-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;white-space:nowrap;flex-shrink:0;}
-.log-meta{font-size:10px;color:var(--subtle);}
-.log-detail{font-size:11px;color:var(--muted);margin-top:2px;}
+    <div id="field-map" style="height:calc(100vh - 36px - 220px);min-height:400px;border-radius:10px;border:1px solid var(--border);"></div>
 
-.panel-inner{padding:16px;}
-.section-label{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--subtle);margin:14px 0 8px;}
-.section-label:first-child{margin-top:0;}
-.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px;}
-.stat-card{background:var(--light);border-radius:8px;padding:10px 8px;text-align:center;border:1px solid var(--border);}
-.stat-n{font-size:20px;font-weight:800;line-height:1;}
-.stat-l{font-size:9px;color:var(--subtle);text-transform:uppercase;letter-spacing:.05em;margin-top:2px;}
+  </main>
+</div>
 
-.btn{display:block;width:100%;padding:11px;border:none;border-radius:8px;font-family:'Outfit',sans-serif;font-size:13px;font-weight:700;cursor:pointer;text-align:center;transition:all .15s;margin-bottom:8px;}
-.btn:last-child{margin-bottom:0;}
-.btn:hover{opacity:.88;}
-.btn-gold{background:var(--gold);color:var(--black);}
-.btn-outline{background:transparent;color:var(--gold-acc);border:2px solid var(--gold);}
-.btn-green{background:var(--green);color:var(--white);}
-.btn-danger{background:transparent;color:var(--red);border:2px solid var(--red);}
-.btn-sm{padding:7px 14px;font-size:12px;display:inline-block;width:auto;margin-bottom:0;}
-.btn-icon{padding:6px 10px;font-size:12px;display:inline-block;width:auto;margin-bottom:0;border-radius:6px;}
+<div id="toast" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--black);border:1px solid var(--gold);color:#fff;font-size:13px;font-weight:600;padding:9px 20px;border-radius:20px;z-index:5000;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;"></div>
 
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;display:none;align-items:flex-end;justify-content:center;}
-.overlay.open{display:flex;}
-.sheet{background:var(--white);border-top:3px solid var(--gold);border-radius:16px 16px 0 0;padding:18px 18px 36px;width:100%;max-width:500px;max-height:92vh;overflow-y:auto;animation:up .2s ease;}
-@keyframes up{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
-.sheet.green-top{border-top-color:var(--green);}
-.handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 14px;}
-.sheet-title{font-size:17px;font-weight:800;margin-bottom:2px;}
-.sheet-sub{font-size:12px;color:var(--muted);margin-bottom:14px;}
-.field-label{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--gold-acc);display:block;margin-bottom:5px;}
-.field-input{width:100%;background:var(--light);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Outfit',sans-serif;font-size:13px;padding:9px 12px;outline:none;margin-bottom:12px;resize:vertical;}
-.field-input:focus{border-color:var(--gold);}
-.field-input::placeholder{color:var(--subtle);}
-.sheet-actions{display:flex;gap:8px;margin-top:4px;}
-.sheet-actions .btn{flex:1;margin-bottom:0;}
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
+<script src="/field-app/js/firebase.js"></script>
+<script src="/field-app/js/auth.js"></script>
+<script src="/field-app/js/data.js"></script>
+<script>
+var fieldMap = null;
+var allLogs = {};
+var allAssigned = {};
+var upcomingAssigned = {};
+var canvassDays = {};
+var roster = {};
+var activeDate = 'all';
+var activeHood = 'all';
+var canvasRenderer = null;
+var showFilters = {completed:true,'not-knocked':true,upcoming:true,nosolic:true,contact:true};
+var typeFilters = {house:true,townhome:true,'twin-home':true,duplex:true,triplex:true,quadplex:true,condo:true,apartment:true,senior:true,assisted:true,'skilled-nursing':true,mobile:true,church:true};
+var mapMarkers = {};
+var today = new Date().toISOString().slice(0,10);
 
-.contact-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:14px;}
-.contact-btn{border:2px solid var(--border);background:var(--light);border-radius:10px;padding:9px 6px;text-align:center;cursor:pointer;transition:all .15s;}
-.contact-btn:hover{background:var(--white);}
-.cb-icon{font-size:17px;margin-bottom:3px;}
-.cb-label{font-size:10px;font-weight:700;color:var(--muted);}
-.contact-btn[data-r="Not Home"].active{border-color:#64748b;background:#f1f5f9;}
-.contact-btn[data-r="Not Home"].active .cb-label{color:#64748b;}
-.contact-btn[data-r="Vacant/For Sale"].active{border-color:#475569;background:#f1f5f9;}
-.contact-btn[data-r="Vacant/For Sale"].active .cb-label{color:#475569;}
-.contact-btn[data-r="Refused"].active{border-color:#c0392b;background:#fef2f2;}
-.contact-btn[data-r="Vacant"].active{border-color:#475569;background:#f1f5f9;}
-.contact-btn[data-r="Vacant"].active .cb-label{color:#475569;}
-.contact-btn[data-r="For Sale"].active{border-color:#7c3aed;background:#f5f3ff;}
-.contact-btn[data-r="For Sale"].active .cb-label{color:#7c3aed;}
-.contact-btn[data-r="No Soliciting"].active{border-color:#92400e;background:#fffbeb;}
-.contact-btn[data-r="No Soliciting"].active .cb-label{color:#92400e;}
-.contact-btn[data-r="Refused"].active .cb-label{color:#c0392b;}
-.contact-btn[data-r="Accepted"].active{border-color:#27ae60;background:#f0fdf4;}
-.contact-btn[data-r="Accepted"].active .cb-label{color:#27ae60;}
-.contact-btn[data-r="Other Language"].active{border-color:#7c3aed;background:#f5f3ff;}
-.contact-btn[data-r="Other Language"].active .cb-label{color:#7c3aed;}
-.contact-btn[data-r="Not Safe"].active{border-color:#92400e;background:#fffbeb;}
-.contact-btn[data-r="Not Safe"].active .cb-label{color:#92400e;}
+var RESULT_COLORS = {
+  'Not Home':'#64748b','Vacant':'#94a3b8','For Sale':'#7c3aed',
+  'No Soliciting':'#92400e','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb'
+};
+var PROP_META_FV = {
+  house:            {label:'House',            color:'#27ae60'},
+  townhome:         {label:'Townhome',         color:'#16a34a'},
+  'twin-home':      {label:'Twin Home',        color:'#65a30d'},
+  duplex:           {label:'Duplex',           color:'#0d9488'},
+  triplex:          {label:'Triplex',          color:'#0891b2'},
+  quadplex:         {label:'Quadplex',         color:'#0369a1'},
+  condo:            {label:'Condo',            color:'#0891b2'},
+  apartment:        {label:'Apartment',        color:'#2563eb'},
+  senior:           {label:'55+ Community',    color:'#d97706'},
+  assisted:         {label:'Assisted Living',  color:'#e67e22'},
+  'skilled-nursing':{label:'Skilled Nursing',  color:'#dc2626'},
+  mobile:           {label:'Mobile Home Park', color:'#7c3aed'},
+  church:           {label:'Church',           color:'#a8a49a'},
+};
+var CONTACT_OPTIONS = ['Not Home','Vacant','For Sale','No Soliciting','Refused','Accepted','Other Language'];
 
-.interest-row{display:flex;gap:5px;margin-bottom:14px;}
-.interest-btn{flex:1;border:2px solid var(--border);background:var(--light);border-radius:8px;padding:10px 4px;text-align:center;cursor:pointer;transition:all .15s;}
-.ib-n{font-size:20px;font-weight:800;line-height:1;}
-.ib-l{font-size:8px;color:var(--subtle);margin-top:2px;}
-.interest-btn[data-i="1"] .ib-n{color:#dc2626;}
-.interest-btn[data-i="2"] .ib-n{color:#ea580c;}
-.interest-btn[data-i="3"] .ib-n{color:#d97706;}
-.interest-btn[data-i="4"] .ib-n{color:#16a34a;}
-.interest-btn[data-i="5"] .ib-n{color:#15803d;}
-.interest-btn.active[data-i="1"]{border-color:#dc2626;background:#fef2f2;}
-.interest-btn.active[data-i="2"]{border-color:#ea580c;background:#fff7ed;}
-.interest-btn.active[data-i="3"]{border-color:#d97706;background:#fffbeb;}
-.interest-btn.active[data-i="4"]{border-color:#16a34a;background:#f0fdf4;}
-.interest-btn.active[data-i="5"]{border-color:#15803d;background:#f0fdf4;}
+var fvEditAddrId = null;
 
-.checks{display:flex;flex-direction:column;gap:7px;margin-bottom:14px;}
-.check-row{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--light);border-radius:8px;cursor:pointer;border:1px solid transparent;transition:all .15s;}
-.check-row:hover{border-color:var(--border);}
-.check-row.checked{border-color:var(--gold);background:#fdf6e0;}
-.check-box{width:18px;height:18px;border-radius:4px;border:2px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent;transition:all .15s;}
-.check-row.checked .check-box{background:var(--gold);border-color:var(--gold);color:var(--black);}
-.check-label{font-size:13px;font-weight:600;}
+function openFvEdit(addrId) {
+  var log = allLogs[addrId];
+  if (!log) return;
+  fvEditAddrId = addrId;
+  var addr = findAddr(addrId);
+  document.getElementById('fv-edit-title').textContent = addr ? (addr.n+' '+addr.s+(addr.u?' - '+addr.u:'')) : 'Edit Result';
 
-.prop-callout{border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;}
-.prop-callout.senior{background:#fef9e7;border:1px solid #d97706;color:#92400e;}
-.prop-callout.apartment{background:#eff6ff;border:1px solid #3b82f6;color:#1d4ed8;}
-.prop-callout.mobile{background:#f5f3ff;border:1px solid #8b5cf6;color:#6d28d9;}
+  // Build contact result buttons
+  var grid = document.getElementById('fv-contact-grid');
+  grid.innerHTML = CONTACT_OPTIONS.map(function(c){
+    return '<div class="contact-btn'+(c===log.contact?' active':'')+'" data-r="'+c+'" onclick="fvSelContact(this)">'+c+'</div>';
+  }).join('');
 
-#login-screen{position:fixed;inset:0;background:var(--cream);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;gap:14px;}
-.login-input{width:100%;max-width:320px;background:var(--white);border:2px solid var(--border);border-radius:10px;color:var(--text);font-family:'Outfit',sans-serif;font-size:15px;padding:12px 16px;outline:none;text-align:center;}
-.login-input:focus{border-color:var(--gold);}
-.login-error{font-size:12px;color:var(--red);font-weight:600;min-height:18px;}
-#login-btn{background:var(--gold);color:var(--black);border:none;border-radius:10px;padding:13px;font-family:'Outfit',sans-serif;font-size:15px;font-weight:800;cursor:pointer;width:100%;max-width:320px;}
+  // Pre-fill fields
+  document.getElementById('fv-chk-lit').classList.toggle('checked', !!(log.litLeft||log.cardLeft));
+  var contactChecked = !!log.wantContact;
+  document.getElementById('fv-chk-contact').classList.toggle('checked', contactChecked);
+  document.getElementById('fv-contact-fields').style.display = contactChecked ? 'block' : 'none';
+  document.getElementById('fv-name').value = log.name||'';
+  document.getElementById('fv-phone').value = log.phone||'';
+  document.getElementById('fv-chk-sign').classList.toggle('checked', !!log.wantSign);
+  document.getElementById('fv-notes').value = log.notes||'';
 
-#setup-screen{position:fixed;inset:0;background:var(--cream);z-index:9998;display:none;flex-direction:column;align-items:center;justify-content:center;padding:28px;text-align:center;gap:11px;overflow-y:auto;}
-.setup-select{width:100%;max-width:340px;background:var(--white);border:2px solid var(--border);border-radius:10px;color:var(--text);font-family:'Outfit',sans-serif;font-size:15px;padding:12px 16px;outline:none;appearance:none;-webkit-appearance:none;cursor:pointer;}
-.setup-select:focus{border-color:var(--gold);}
-.setup-label{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--subtle);width:100%;max-width:340px;text-align:left;}
-#setup-btn{background:var(--gold);color:var(--black);border:none;border-radius:10px;padding:13px;font-family:'Outfit',sans-serif;font-size:15px;font-weight:800;cursor:pointer;width:100%;max-width:340px;margin-top:4px;}
-#setup-btn:disabled{opacity:.4;cursor:not-allowed;}
-.hood-note{font-size:11px;color:var(--muted);background:var(--white);border:1px solid var(--border);border-radius:8px;padding:8px 12px;width:100%;max-width:340px;text-align:left;line-height:1.5;}
-.setup-loading{font-size:13px;color:var(--muted);width:100%;max-width:340px;text-align:center;padding:8px;}
-
-#admin-screen{position:fixed;inset:0;background:var(--cream);z-index:9997;display:none;flex-direction:column;}
-#admin-topbar{background:var(--black);border-bottom:3px solid var(--gold);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
-#admin-topbar .a-title{font-size:14px;font-weight:800;color:var(--gold);}
-#admin-topbar .a-sub{font-size:10px;color:#888;}
-#admin-back{background:transparent;border:1px solid #555;color:#ccc;font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;padding:6px 14px;border-radius:8px;cursor:pointer;}
-#admin-mobile-nav{display:none;background:var(--white);border-bottom:2px solid var(--border);padding:0 16px;gap:0;flex-shrink:0;}
-.amn-link{padding:10px 14px;font-size:12px;font-weight:700;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent;display:inline-block;}
-.amn-link:hover{color:var(--gold-acc);}
-#admin-
-#admin-rail{width:160px;background:var(--white);border-right:2px solid var(--border);padding:16px 0;flex-shrink:0;display:flex;flex-direction:column;gap:2px;}
-.rail-link{display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px;font-weight:700;color:var(--muted);text-decoration:none;border-right:3px solid transparent;transition:all .15s;}
-.rail-link:hover{color:var(--text);background:var(--light);}
-.rail-link.active{color:var(--gold-acc);background:#fdf6e0;border-right-color:var(--gold);}
-.rail-icon{font-size:16px;width:20px;text-align:center;}
-#admin-content{flex:1;overflow-y:auto;padding:0;}
-.admin-section-page{padding:28px 32px;border-bottom:2px solid var(--border);scroll-margin-top:0;}
-.admin-section-page:last-child{border-bottom:none;min-height:60vh;}
-.asp-header{margin-bottom:20px;}
-.asp-title{font-size:20px;font-weight:800;color:var(--text);margin-bottom:4px;}
-.asp-sub{font-size:13px;color:var(--muted);line-height:1.5;}
-.asp-body{}
-.field-row{display:flex;gap:12px;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap;}
-.field-col{flex:1;min-width:160px;}
-.a-label{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--gold-acc);display:block;margin-bottom:5px;}
-.a-input{width:100%;background:var(--white);border:2px solid var(--border);border-radius:8px;color:var(--text);font-family:'Outfit',sans-serif;font-size:13px;padding:9px 12px;outline:none;appearance:none;-webkit-appearance:none;}
-.a-input:focus{border-color:var(--gold);}
-.a-input::placeholder{color:var(--subtle);}
-.a-btn{padding:10px 18px;border:none;border-radius:8px;font-family:'Outfit',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;white-space:nowrap;}
-.a-btn:hover{opacity:.88;}
-.a-btn:disabled{opacity:.4;cursor:not-allowed;}
-.a-btn-gold{background:var(--gold);color:var(--black);}
-.a-btn-outline{background:transparent;border:2px solid var(--gold);color:var(--gold-acc);}
-.a-btn-danger{background:transparent;border:2px solid var(--red);color:var(--red);}
-.new-shift-form{background:var(--white);border:2px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px;}
-.nsf-title{font-size:14px;font-weight:800;color:var(--text);margin-bottom:14px;}
-.vol-check-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;}
-.vol-check-item{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--light);border-radius:8px;cursor:pointer;border:1px solid transparent;transition:all .15s;user-select:none;}
-.vol-check-item:hover{border-color:var(--border);}
-.vol-check-item.checked{border-color:var(--gold);background:#fdf6e0;}
-.vci-box{width:16px;height:16px;border-radius:3px;border:2px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:transparent;transition:all .15s;}
-.vol-check-item.checked .vci-box{background:var(--gold);border-color:var(--gold);color:var(--black);}
-.vci-name{font-size:12px;font-weight:700;}
-.days-divider{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--subtle);margin:16px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);}
-#admin-map{width:100%;height:380px;border-radius:10px;border:2px solid var(--border);margin-bottom:10px;}
-.assign-bottom{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:12px;flex-wrap:wrap;gap:8px;}
-.assign-status{font-size:12px;color:var(--muted);}
-.admin-checklist{border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:320px;overflow-y:auto;}
-.admin-map-toggle{display:flex;background:var(--light);border-radius:8px;padding:3px;gap:2px;border:1px solid var(--border);}
-.amt-btn{padding:5px 14px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:'Outfit',sans-serif;transition:all .15s;}
-.amt-btn.active{background:var(--white);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.1);}
-
-.roster-list{display:flex;flex-direction:column;gap:8px;margin-top:4px;}
-.roster-item{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--white);border:1px solid var(--border);border-radius:10px;transition:all .15s;}
-.roster-item.inactive{opacity:.55;}
-.roster-avatar{width:34px;height:34px;border-radius:50%;background:var(--gold);color:var(--black);font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.roster-avatar.inactive-av{background:var(--mid);color:var(--muted);}
-.roster-info{flex:1;min-width:0;}
-.roster-name{font-size:13px;font-weight:700;}
-.roster-status{font-size:10px;color:var(--subtle);}
-.roster-edit-input{font-size:13px;font-weight:700;font-family:'Outfit',sans-serif;border:none;border-bottom:2px solid var(--gold);outline:none;background:transparent;color:var(--text);width:100%;padding:0 0 2px;}
-.roster-actions{display:flex;gap:6px;flex-shrink:0;}
-.r-btn{padding:5px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:var(--white);color:var(--muted);font-family:'Outfit',sans-serif;transition:all .15s;}
-.r-btn:hover{border-color:var(--gold-acc);color:var(--gold-acc);}
-.r-btn.r-save{border-color:var(--green);color:var(--green);}
-.r-btn.r-cancel{border-color:var(--border);color:var(--muted);}
-.r-btn.r-danger:hover{border-color:var(--red);color:var(--red);}
-
-.day-item{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:8px;}
-.day-item.past-day{background:var(--light);opacity:.85;}
-.day-item-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px;}
-.day-date{font-size:14px;font-weight:800;}
-.day-meta{font-size:11px;color:var(--muted);margin-top:2px;}
-.day-volunteers{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap;}
-.day-vol-pill{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--gold);color:var(--black);}
-.day-actions{display:flex;gap:6px;}
-
-
-
-#map-legend{position:absolute;bottom:24px;left:12px;z-index:700;background:var(--white);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:11px;box-shadow:0 2px 8px rgba(0,0,0,.1);}
-.legend-row{display:flex;align-items:center;gap:7px;margin-bottom:5px;font-weight:600;color:var(--text);}
-.legend-row:last-child{margin-bottom:0;}
-.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
-.sign-hint{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(29,27,22,.9);border:1px solid var(--green);border-radius:20px;padding:8px 18px;font-size:12px;font-weight:700;color:var(--green);z-index:700;pointer-events:none;white-space:nowrap;}
-
-#fab-toggle{display:none;position:fixed;bottom:24px;right:16px;z-index:700;background:var(--gold);color:var(--black);border:none;border-radius:28px;padding:12px 20px;font-family:'Outfit',sans-serif;font-size:13px;font-weight:800;box-shadow:0 4px 16px rgba(0,0,0,.2);cursor:pointer;align-items:center;gap:8px;}
-
-.leaflet-popup-content-wrapper{background:var(--white)!important;border:2px solid var(--gold)!important;border-radius:10px!important;color:var(--text)!important;padding:0!important;font-family:'Outfit',sans-serif!important;box-shadow:0 4px 20px rgba(0,0,0,.12)!important;}
-.leaflet-popup-content{margin:0!important;}
-.leaflet-popup-tip-container{display:none;}
-.leaflet-popup-close-button{color:var(--muted)!important;font-size:18px!important;top:8px!important;right:10px!important;width:auto!important;height:auto!important;}
-.mpop{padding:14px 16px;min-width:190px;max-width:260px;}
-.mpop-addr{font-size:14px;font-weight:700;padding-right:20px;margin-bottom:2px;}
-.mpop-meta{font-size:11px;color:var(--muted);margin-bottom:6px;}
-.mpop-type,.mpop-status{font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;display:inline-block;margin-bottom:4px;}
-.mpop-assignee{font-size:11px;color:var(--muted);margin-bottom:4px;}
-.mpop-detail{font-size:11px;color:var(--muted);margin-bottom:6px;line-height:1.5;}
-.mpop-btn{display:block;width:100%;padding:8px;background:var(--gold);color:var(--black);font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;border:none;border-radius:6px;cursor:pointer;margin-top:4px;}
-
-#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--black);border:1px solid var(--gold);color:var(--white);font-size:13px;font-weight:600;padding:9px 20px;border-radius:20px;z-index:5000;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;}
-#toast.show{opacity:1;}
-
-::-webkit-scrollbar{width:5px;}
-::-webkit-scrollbar-track{background:transparent;}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
-
-@media(max-width:640px){
-  #main{flex-direction:column;}
-  #sidebar{width:100%;height:100%;border-left:none;border-top:none;order:2;position:absolute;inset:0;z-index:600;}
-  #map{height:100%;order:1;width:100%;}
-  #map-legend{display:none;}
-  #main.show-map #sidebar{display:none;}
-  #main.show-list #map{visibility:hidden;}
-  #fab-toggle{display:flex;}
-  #admin-rail{display:none;}
-  #admin-mobile-nav{display:flex;}
-  .admin-section-page{padding:20px 16px;}
-  #admin-map{height:260px;}
+  document.getElementById('fv-edit-overlay').classList.add('open');
 }
 
-/* ── PAGE LAYOUTS ────────────────────────────────────────────────────────── */
-body{padding-top:36px;} /* account for user bar */
-
-/* User bar */
-#user-bar{position:fixed;top:0;left:0;right:0;z-index:9999;background:var(--black);color:#fff;
-  font-size:12px;font-family:'Outfit',sans-serif;padding:6px 16px;display:none;
-  align-items:center;justify-content:space-between;height:36px;}
-#user-bar-name{font-weight:600;font-size:12px;}
-.user-bar-right{display:flex;align-items:center;gap:12px;}
-.user-bar-link{color:var(--gold);text-decoration:none;font-size:11px;font-weight:700;}
-.user-bar-link:hover{text-decoration:underline;}
-.signout-btn{background:transparent;border:1px solid #555;color:#ccc;font-family:'Outfit',sans-serif;
-  font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;cursor:pointer;}
-
-/* Auth page */
-.auth-page{min-height:100vh;background:var(--cream);display:flex;align-items:center;
-  justify-content:center;padding:32px;font-family:'Outfit',sans-serif;}
-.auth-card{width:100%;max-width:340px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;}
-.auth-logo{font-size:48px;}
-.auth-title{font-size:24px;font-weight:800;color:var(--gold-acc);}
-.auth-sub{font-size:13px;color:var(--muted);line-height:1.5;}
-.auth-divider{display:flex;align-items:center;gap:8px;width:100%;color:var(--subtle);font-size:12px;}
-.auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--border);}
-.auth-input{width:100%;background:var(--white);border:2px solid var(--border);border-radius:10px;
-  color:var(--text);font-family:'Outfit',sans-serif;font-size:14px;padding:12px 16px;
-  outline:none;box-sizing:border-box;transition:border-color .15s;}
-.auth-input:focus{border-color:var(--gold);}
-.auth-pw-wrap{position:relative;width:100%;}
-.auth-pw-wrap .auth-input{padding-right:52px;}
-.pw-toggle{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;
-  border:none;cursor:pointer;font-size:12px;font-weight:700;color:var(--muted);
-  font-family:'Outfit',sans-serif;padding:4px 6px;}
-.auth-btn-google{width:100%;padding:12px;border:2px solid var(--border);border-radius:10px;
-  background:var(--white);font-family:'Outfit',sans-serif;font-size:14px;font-weight:700;
-  cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:all .15s;}
-.auth-btn-google:hover{border-color:var(--gold);background:var(--light);}
-.auth-btn-email{width:100%;padding:13px;border:none;border-radius:10px;background:var(--gold);
-  color:var(--black);font-family:'Outfit',sans-serif;font-size:15px;font-weight:800;cursor:pointer;transition:all .15s;}
-.auth-btn-email:hover{opacity:.88;}
-.auth-msg{font-size:12px;font-weight:600;min-height:18px;max-width:300px;}
-.auth-denied{background:var(--white);border:2px solid var(--red);border-radius:10px;
-  padding:16px;font-size:13px;color:var(--red);font-weight:600;max-width:300px;line-height:1.5;}
-
-/* Admin layout */
-.admin-layout{display:flex;min-height:calc(100vh - 36px);width:100%;overflow-y:auto;}
-.admin-sidebar{width:220px;background:var(--white);border-right:2px solid var(--border);
-  flex-shrink:0;display:flex;flex-direction:column;position:fixed;top:36px;bottom:0;left:0;
-  overflow-y:auto;z-index:100;}
-.admin-sidebar-brand{padding:16px;border-bottom:2px solid var(--border);}
-.admin-sidebar-brand .brand-name{font-size:13px;font-weight:800;color:var(--gold-acc);}
-.admin-sidebar-brand .brand-sub{font-size:10px;color:var(--subtle);margin-top:2px;}
-.admin-nav{padding:8px 0;flex:1;}
-.admin-nav-section{font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
-  color:var(--subtle);padding:12px 16px 4px;}
-.admin-nav-link{display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:13px;
-  font-weight:600;color:var(--muted);text-decoration:none;border-left:3px solid transparent;
-  transition:all .15s;}
-.admin-nav-link:hover{color:var(--text);background:var(--light);}
-.admin-nav-link.active{color:var(--gold-acc);background:#fdf6e0;border-left-color:var(--gold);font-weight:700;}
-.admin-nav-icon{font-size:16px;width:20px;text-align:center;}
-.admin-content{margin-left:220px;flex:1;padding:28px 32px;min-height:calc(100vh - 36px);overflow-y:visible;}
-.admin-page-header{margin-bottom:24px;}
-.admin-page-title{font-size:22px;font-weight:800;color:var(--text);}
-.admin-page-sub{font-size:13px;color:var(--muted);margin-top:4px;}
-
-/* Cards and sections */
-.page-card{background:var(--white);border:1px solid var(--border);border-radius:12px;
-  padding:20px;margin-bottom:16px;}
-.page-card-title{font-size:14px;font-weight:800;color:var(--text);margin-bottom:14px;
-  display:flex;align-items:center;justify-content:space-between;}
-.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;}
-.stat-card{background:var(--light);border:1px solid var(--border);border-radius:10px;
-  padding:14px;text-align:center;}
-.stat-n{font-size:28px;font-weight:800;line-height:1;}
-.stat-l{font-size:9px;color:var(--subtle);text-transform:uppercase;letter-spacing:.06em;margin-top:3px;}
-
-/* Shifts list */
-.shift-item{background:var(--white);border:1px solid var(--border);border-radius:10px;
-  padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;}
-.shift-item:hover{border-color:var(--gold);background:#fdf6e0;}
-.shift-date-badge{background:var(--gold);color:var(--black);border-radius:8px;
-  padding:6px 10px;text-align:center;min-width:52px;flex-shrink:0;}
-.shift-date-badge .day{font-size:20px;font-weight:800;line-height:1;}
-.shift-date-badge .month{font-size:9px;font-weight:700;text-transform:uppercase;}
-.shift-info{flex:1;min-width:0;}
-.shift-hood{font-size:13px;font-weight:700;}
-.shift-meta{font-size:11px;color:var(--muted);margin-top:2px;}
-.shift-vols{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap;}
-.shift-vol-pill{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;
-  background:var(--light);color:var(--muted);border:1px solid var(--border);}
-.shift-actions{display:flex;gap:6px;flex-shrink:0;}
-.shift-past{opacity:.7;}
-.shift-section-label{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-  color:var(--subtle);padding:8px 0 6px;border-bottom:1px solid var(--border);margin-bottom:10px;}
-
-/* Form elements */
-.form-group{margin-bottom:14px;}
-.form-label{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
-  color:var(--gold-acc);display:block;margin-bottom:5px;}
-.form-input{width:100%;background:var(--white);border:2px solid var(--border);border-radius:8px;
-  color:var(--text);font-family:'Outfit',sans-serif;font-size:13px;padding:9px 12px;
-  outline:none;appearance:none;-webkit-appearance:none;box-sizing:border-box;transition:border-color .15s;}
-.form-input:focus{border-color:var(--gold);}
-.form-input::placeholder{color:var(--subtle);}
-.form-row{display:flex;gap:12px;flex-wrap:wrap;}
-.form-col{flex:1;min-width:160px;}
-
-/* Buttons */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;
-  border:none;border-radius:8px;font-family:'Outfit',sans-serif;font-size:13px;font-weight:700;
-  cursor:pointer;transition:all .15s;text-decoration:none;white-space:nowrap;}
-.btn:hover{opacity:.88;}
-.btn-gold{background:var(--gold);color:var(--black);}
-.btn-outline{background:transparent;border:2px solid var(--gold);color:var(--gold-acc);}
-.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--muted);}
-.btn-danger{background:transparent;border:2px solid var(--red);color:var(--red);}
-.btn-sm{padding:6px 12px;font-size:12px;}
-.btn:disabled{opacity:.4;cursor:not-allowed;}
-
-/* Field map page */
-.field-map-wrap{height:calc(100vh - 36px - 56px);min-height:400px;border-radius:10px;
-  border:1px solid var(--border);overflow:hidden;margin-bottom:12px;}
-.field-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;}
-.filter-pill{padding:5px 12px;border-radius:16px;font-size:11px;font-weight:700;cursor:pointer;
-  border:1.5px solid var(--border);background:var(--white);color:var(--muted);transition:all .15s;}
-.filter-pill.active{background:var(--gold);color:var(--black);border-color:transparent;}
-
-/* Mobile */
-@media(max-width:768px){
-  .admin-sidebar{display:none !important;}
-  .admin-layout{display:block;}
-  .admin-content{margin-left:0 !important;padding:16px;width:100%;box-sizing:border-box;}
-  .mobile-nav{display:flex;background:var(--white);border-bottom:2px solid var(--border);
-    overflow-x:auto;padding:0 8px;position:sticky;top:36px;z-index:50;width:100%;
-    box-sizing:border-box;}
-  .mobile-nav-link{padding:10px 14px;font-size:12px;font-weight:700;color:var(--muted);
-    text-decoration:none;white-space:nowrap;border-bottom:3px solid transparent;}
-  .mobile-nav-link.active{color:var(--gold-acc);border-bottom-color:var(--gold);}
-  .stat-row{grid-template-columns:repeat(2,1fr);}
-  body{overflow-x:hidden;}
-}
-@media(min-width:769px){
-  .mobile-nav{display:none;}
+function fvSelContact(el) {
+  document.querySelectorAll('#fv-contact-grid .contact-btn').forEach(function(b){b.classList.remove('active');});
+  el.classList.add('active');
 }
 
-/* Door drawer save/cancel buttons */
-.door-save-btn{flex:1;padding:13px;border:none;border-radius:10px;background:var(--gold);
-  color:var(--black);font-family:'Outfit',sans-serif;font-size:15px;font-weight:800;cursor:pointer;
-  transition:opacity .15s;}
-.door-save-btn:hover{opacity:.88;}
-.door-cancel-btn{flex:1;padding:13px;border:2px solid var(--border);border-radius:10px;
-  background:var(--white);color:var(--muted);font-family:'Outfit',sans-serif;font-size:14px;
-  font-weight:700;cursor:pointer;transition:all .15s;}
-.door-cancel-btn:hover{border-color:var(--gold);color:var(--text);}
+function closeFvEdit() {
+  document.getElementById('fv-edit-overlay').classList.remove('open');
+  fvEditAddrId = null;
+}
 
-/* Filter pill count badges */
-.pill-count{display:inline-block;background:rgba(0,0,0,.12);border-radius:8px;
-  padding:1px 6px;font-size:10px;font-weight:800;margin-left:3px;}
-.filter-pill.active .pill-count{background:rgba(0,0,0,.18);}
+function saveFvEdit() {
+  if (!fvEditAddrId) return;
+  var log = allLogs[fvEditAddrId];
+  if (!log || !log.volId || !log.hoodKey || !log.date) { showToast('Cannot edit this entry'); return; }
+
+  var activeBtn = document.querySelector('#fv-contact-grid .contact-btn.active');
+  if (!activeBtn) { showToast('Select a contact result'); return; }
+
+  var updated = Object.assign({}, log, {
+    contact: activeBtn.dataset.r,
+    litLeft: document.getElementById('fv-chk-lit').classList.contains('checked'),
+    wantContact: document.getElementById('fv-chk-contact').classList.contains('checked'),
+    name: document.getElementById('fv-name').value.trim(),
+    phone: document.getElementById('fv-phone').value.trim(),
+    wantSign: document.getElementById('fv-chk-sign').classList.contains('checked'),
+    notes: document.getElementById('fv-notes').value.trim(),
+  });
+
+  var path = '/'+log.hoodKey+'/logs/'+log.date+'/'+log.volId+'/'+fvEditAddrId;
+  fbPut(path, updated).then(function(){
+    allLogs[fvEditAddrId] = updated;
+    showToast('Saved');
+    closeFvEdit();
+    refreshFieldMarkers();
+  }).catch(function(){ showToast('Save failed'); });
+}
+
+initAuth(
+  function(user) { loadFieldData(); },
+  function(user) { window.location.href = '/field-app/canvass.html'; }
+);
+
+function loadFieldData() {
+  setFbBase();
+  Promise.all([
+    fbGet('/roster'),
+    fbGet('/canvass-days')
+  ].concat((window.NEIGHBORHOODS||[]).map(function(n){
+    return Promise.all([fbGet('/'+n.key+'/logs'), fbGet('/'+n.key+'/assignments')])
+      .then(function(r){ return {key:n.key, logs:r[0], assignments:r[1]}; });
+  }))).then(function(results) {
+    roster = results[0] || {};
+    canvassDays = results[1] || {};
+    var hoodResults = results.slice(2);
+
+    var dates = Object.keys(canvassDays).sort().reverse();
+    var sel = document.getElementById('date-select');
+    if (sel) {
+      dates.forEach(function(d) {
+        var o = document.createElement('option');
+        o.value = d; o.textContent = formatDate(d);
+        sel.appendChild(o);
+      });
+    }
+
+    var hoodSel = document.getElementById('hood-select');
+    if (hoodSel) {
+      (window.NEIGHBORHOODS||[]).forEach(function(n) {
+        var o = document.createElement('option');
+        o.value = n.key; o.textContent = n.displayName;
+        hoodSel.appendChild(o);
+      });
+      // Default to Hamline (or first neighborhood) instead of "All" for performance —
+      // "All Neighborhoods" with 14,000+ addresses is slow; most days you're working one area.
+      if (window.NEIGHBORHOODS && window.NEIGHBORHOODS.length) {
+        activeHood = window.NEIGHBORHOODS[0].key;
+        hoodSel.value = activeHood;
+      }
+    }
+
+    hoodResults.forEach(function(hood) {
+      var logs = hood.logs || {};
+      var assigns = hood.assignments || {};
+      Object.entries(logs).forEach(function(datePair) {
+        var date = datePair[0], volLogs = datePair[1];
+        if (!volLogs) return;
+        Object.entries(volLogs).forEach(function(volPair) {
+          var volId = volPair[0], addrLogs = volPair[1];
+          if (!addrLogs) return;
+          Object.entries(addrLogs).forEach(function(pair) {
+            var addrId = pair[0], log = pair[1];
+            if (!allLogs[addrId] || (log.time||'') > (allLogs[addrId].time||'')) {
+              allLogs[addrId] = Object.assign({}, log, {date:date, volId:volId, hoodKey:hood.key});
+            }
+          });
+        });
+      });
+      Object.entries(assigns).forEach(function(datePair) {
+        var date = datePair[0], volAssigns = datePair[1];
+        if (!volAssigns) return;
+        Object.values(volAssigns).forEach(function(assignment) {
+          if (!assignment || !assignment.assignments) return;
+          Object.keys(assignment.assignments).forEach(function(addrId) {
+            allAssigned[addrId] = {date:date};
+            if (date >= today) upcomingAssigned[addrId] = date;
+          });
+        });
+      });
+    });
+
+    document.getElementById('field-sub').textContent =
+      Object.keys(allLogs).length + ' doors logged across all shifts';
+    initFieldMap();
+  }).catch(function(e) {
+    document.getElementById('field-sub').textContent = 'Error: ' + e.message;
+  });
+}
+
+function initFieldMap() {
+  fieldMap = L.map('field-map').setView([45.017,-93.153], 14);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 20
+  }).addTo(fieldMap);
+  // Canvas renderer draws all points to one canvas element instead of
+  // creating a separate DOM node per marker — dramatically faster at scale.
+  canvasRenderer = L.canvas({ padding: 0.5 });
+  mapNeedsFit = true;
+  refreshFieldMarkers();
+}
+
+function activeNeighborhoods() {
+  if (activeHood === 'all') return window.NEIGHBORHOODS || [];
+  return (window.NEIGHBORHOODS || []).filter(function(n){ return n.key === activeHood; });
+}
+
+function setDateFilter(date) {
+  activeDate = date;
+  refreshFieldMarkers();
+}
+
+function setHoodFilter(hood) {
+  activeHood = hood;
+  mapNeedsFit = true;
+  refreshFieldMarkers();
+}
+
+function toggleShow(key) {
+  showFilters[key] = !showFilters[key];
+  var el = document.querySelector('[data-show="'+key+'"]');
+  if (el) el.classList.toggle('active', showFilters[key]);
+  refreshFieldMarkers();
+}
+
+function toggleType(key) {
+  typeFilters[key] = !typeFilters[key];
+  var el = document.querySelector('[data-type="'+key+'"]');
+  if (el) el.classList.toggle('active', typeFilters[key]);
+  refreshFieldMarkers();
+}
+
+var MULTI_UNIT_TYPES = {apartment:true, condo:true};
+
+function refreshFieldMarkers() {
+  if (!fieldMap) return;
+  Object.values(mapMarkers).forEach(function(m){ fieldMap.removeLayer(m); });
+  mapMarkers = {};
+  var bounds = [];
+  var typeTally = {house:0,townhome:0,'twin-home':0,duplex:0,triplex:0,quadplex:0,condo:0,apartment:0,senior:0,assisted:0,'skilled-nursing':0,mobile:0,church:0};
+
+  // First pass: collect visible addresses, grouping apartment/condo units that
+  // share a building coordinate so we render ONE marker per building instead
+  // of one per unit (a 33-unit condo building was rendering as 33 stacked dots).
+  var buildingGroups = {}; // key: "lat,lng" -> array of addr
+
+  activeNeighborhoods().forEach(function(n) {
+    (window.NEIGHBORHOOD_DATA[n.key]||[]).forEach(function(addr) {
+      var log = allLogs[addr.id];
+      var isLogged = !!log;
+      var isUpcoming = !!upcomingAssigned[addr.id];
+      var isNoSolic = log && log.contact === 'No Soliciting';
+      if (activeDate !== 'all' && isLogged && log.date !== activeDate) return;
+      if (isLogged && isNoSolic && !showFilters.nosolic) return;
+      if (isLogged && !isNoSolic && !showFilters.completed) return;
+      if (!isLogged && isUpcoming && !showFilters.upcoming) return;
+      if (!isLogged && !isUpcoming && !showFilters['not-knocked']) return;
+
+      var addrType = addr.t || 'house';
+      typeTally[addrType] = (typeTally[addrType]||0) + 1;
+      if (!typeFilters[addrType]) return;
+
+      if (MULTI_UNIT_TYPES[addrType]) {
+        var key = addr.lat.toFixed(6)+','+addr.lng.toFixed(6);
+        if (!buildingGroups[key]) buildingGroups[key] = [];
+        buildingGroups[key].push(addr);
+      } else {
+        renderSingleMarker(addr, log, isLogged, isUpcoming);
+        bounds.push([addr.lat, addr.lng]);
+      }
+    });
+  });
+
+  // Second pass: render one aggregated marker per building group
+  Object.keys(buildingGroups).forEach(function(key) {
+    var units = buildingGroups[key];
+    renderBuildingMarker(units);
+    bounds.push([units[0].lat, units[0].lng]);
+  });
+
+  Object.keys(typeTally).forEach(function(t){
+    var el = document.getElementById('count-'+t);
+    if (el) el.textContent = typeTally[t];
+  });
+
+  if (bounds.length && mapNeedsFit) {
+    fieldMap.fitBounds(bounds, {padding:[20,20]});
+    mapNeedsFit = false;
+  }
+}
+
+function typeBadgeHtml(addrType) {
+  var meta = PROP_META_FV[addrType];
+  var label = meta ? meta.label : (addrType.charAt(0).toUpperCase()+addrType.slice(1));
+  var color = meta ? meta.color : '#888';
+  return '<span style="display:inline-block;font-size:9px;font-weight:800;color:#fff;background:'+color+';border-radius:6px;padding:2px 7px;margin-top:4px;">'+label+'</span>';
+}
+
+function renderSingleMarker(addr, log, isLogged, isUpcoming) {
+  var isContact = log && log.wantContact;
+  var color, radius, opacity;
+  if (isLogged) { color=RESULT_COLORS[log.contact]||'#888'; radius=5; opacity=1; }
+  else if (isUpcoming) { color='#D4A832'; radius=4; opacity=.7; }
+  else { color='#e0ddd3'; radius=3.5; opacity=.5; }
+
+  var marker = L.circleMarker([addr.lat, addr.lng], {
+    renderer: canvasRenderer,
+    radius: radius,
+    fillColor: color,
+    fillOpacity: opacity,
+    color: isContact ? '#D4A832' : 'rgba(0,0,0,.15)',
+    weight: isContact ? 2.5 : 1,
+  }).addTo(fieldMap);
+
+  marker.bindPopup(function() {
+    var popup = '<div style="min-width:200px;padding:6px 2px;">';
+    popup += '<strong>'+addr.n+' '+addr.s+(addr.u?' - '+addr.u:'')+'</strong>';
+    popup += typeBadgeHtml(addr.t||'house');
+    if (isLogged) {
+      popup += '<div style="margin-top:8px;line-height:1.5;">';
+      popup += '<strong style="color:'+color+';">'+log.contact+'</strong><br>';
+      if (log.name) popup += log.name+(log.phone?' - '+log.phone:'')+'<br>';
+      if (log.wantSign) popup += 'Wants Yard Sign<br>';
+      if (log.wantContact) popup += 'Cassie to Contact<br>';
+      if (log.notes) popup += '<em>'+log.notes+'</em><br>';
+      popup += '</div>';
+      popup += '<button onclick="openFvEdit(\''+addr.id+'\')" style="margin-top:8px;font-size:11px;font-weight:700;padding:6px 12px;background:#D4A832;border:none;border-radius:5px;cursor:pointer;width:100%;">Edit</button>';
+    } else if (isUpcoming) {
+      popup += '<div style="margin-top:8px;"><em>Upcoming: '+formatDate(upcomingAssigned[addr.id])+'</em></div>';
+    } else {
+      popup += '<div style="margin-top:8px;"><em>Not yet canvassed</em></div>';
+    }
+    popup += '</div>';
+    return popup;
+  });
+
+  mapMarkers[addr.id] = marker;
+}
+
+function renderBuildingMarker(units) {
+  var first = units[0];
+  var unitCount = units.length;
+  var loggedUnits = units.filter(function(u){ return !!allLogs[u.id]; });
+  var loggedCount = loggedUnits.length;
+
+  var color, opacity;
+  if (loggedCount === 0) { color = '#e0ddd3'; opacity = .6; }
+  else if (loggedCount < unitCount) { color = '#D4A832'; opacity = .75; }
+  else { color = '#27ae60'; opacity = 1; }
+
+  var radius = 9; // larger — visually distinct as a "building" not a single door
+
+  var marker = L.circleMarker([first.lat, first.lng], {
+    renderer: canvasRenderer,
+    radius: radius,
+    fillColor: color,
+    fillOpacity: opacity,
+    color: 'rgba(0,0,0,.25)',
+    weight: 1.5,
+  }).addTo(fieldMap);
+
+  marker.bindPopup(function() {
+    var popup = '<div style="min-width:210px;padding:6px 2px;">';
+    popup += '<strong>'+first.n+' '+first.s+'</strong>';
+    popup += typeBadgeHtml(first.t||'apartment');
+    popup += '<div style="margin-top:8px;font-size:12px;line-height:1.6;">';
+    popup += '<strong>'+unitCount+' units</strong> &middot; '+loggedCount+' logged<br>';
+    popup += '</div>';
+    popup += '<div style="margin-top:6px;font-size:11px;color:var(--subtle,#a8a49a);">Open this building\'s shift to log or edit individual units.</div>';
+    popup += '</div>';
+    return popup;
+  });
+
+  units.forEach(function(u){ mapMarkers[u.id] = marker; });
+}
+
+function exportList(type) {
+  var rows = [], header;
+  if (type === 'contact') {
+    header = 'First Name,Last Name,Phone,Email,Address,Date,Notes';
+    Object.entries(allLogs).forEach(function(pair) {
+      var addrId=pair[0], log=pair[1];
+      if (!log.wantContact) return;
+      if (activeDate !== 'all' && log.date !== activeDate) return;
+      var addr = findAddr(addrId);
+      rows.push([log.name||'',log.lastname||'',log.phone||'',log.email||'',
+        addr?addr.n+' '+addr.s+(addr.u?' '+addr.u:''):'',log.date||'',log.notes||''].map(csvCell).join(','));
+    });
+  } else if (type === 'signs') {
+    header = 'Address,Unit,Street,First Name,Last Name,Phone,Date';
+    Object.entries(allLogs).forEach(function(pair) {
+      var addrId=pair[0], log=pair[1];
+      if (!log.wantSign) return;
+      if (activeDate !== 'all' && log.date !== activeDate) return;
+      var addr = findAddr(addrId);
+      rows.push([addr?addr.n:'',addr?addr.u||'':'',addr?addr.s:'',
+        log.name||'',log.lastname||'',log.phone||'',log.date||''].map(csvCell).join(','));
+    });
+  } else if (type === 'nosolic') {
+    header = 'Address,Unit,Street,Date';
+    Object.entries(allLogs).forEach(function(pair) {
+      var addrId=pair[0], log=pair[1];
+      if (log.contact !== 'No Soliciting') return;
+      if (activeDate !== 'all' && log.date !== activeDate) return;
+      var addr = findAddr(addrId);
+      rows.push([addr?addr.n:'',addr?addr.u||'':'',addr?addr.s:'',log.date||''].map(csvCell).join(','));
+    });
+  }
+  if (!rows.length) { showToast('No data to export'); return; }
+  var csv = header + '\n' + rows.join('\n');
+  var blob = new Blob([csv],{type:'text/csv'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href=url; a.download='c4r-'+type+'-'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},5000);
+  showToast('Downloaded '+rows.length+' rows');
+}
+
+function findAddr(id) {
+  var found = null;
+  (window.NEIGHBORHOODS||[]).forEach(function(n){
+    (window.NEIGHBORHOOD_DATA[n.key]||[]).forEach(function(a){ if(a.id===id) found=a; });
+  });
+  return found;
+}
+
+function csvCell(v){ return '"'+(v||'').toString().replace(/"/g,'""')+'"'; }
+
+var _tt;
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.style.opacity='1';
+  clearTimeout(_tt);
+  _tt=setTimeout(function(){t.style.opacity='0';},2500);
+}
+</script>
+
+<style>
+.fv-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:6000;display:none;align-items:flex-end;justify-content:center;}
+.fv-overlay.open{display:flex;}
+.fv-sheet{background:var(--white);border-top:3px solid var(--gold);border-radius:16px 16px 0 0;padding:18px 18px 28px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;}
+.fv-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 14px;}
+.fv-title{font-size:16px;font-weight:800;margin-bottom:10px;}
+</style>
+
+<div class="fv-overlay" id="fv-edit-overlay" onclick="if(event.target===this) closeFvEdit()">
+  <div class="fv-sheet">
+    <div class="fv-handle"></div>
+    <div class="fv-title" id="fv-edit-title">Edit Result</div>
+
+    <span class="field-label">Contact Result</span>
+    <div class="contact-grid" id="fv-contact-grid"></div>
+
+    <div class="checks">
+      <div class="check-row" id="fv-chk-lit" onclick="this.classList.toggle('checked')"><div class="check-box">✓</div><div class="check-label">📄 Literature Left</div></div>
+      <div class="check-row" id="fv-chk-contact" onclick="this.classList.toggle('checked');document.getElementById('fv-contact-fields').style.display=this.classList.contains('checked')?'block':'none';"><div class="check-box">✓</div><div class="check-label">📞 Cassie to Contact</div></div>
+      <div id="fv-contact-fields" style="display:none;background:var(--light);border-radius:8px;padding:10px 12px;margin-bottom:8px;">
+        <span class="field-label">First Name</span>
+        <input class="field-input" id="fv-name" type="text" placeholder="First name…" style="margin-bottom:8px;">
+        <span class="field-label">Phone</span>
+        <input class="field-input" id="fv-phone" type="tel" placeholder="Phone number…" style="margin-bottom:8px;">
+      </div>
+      <div class="check-row" id="fv-chk-sign" onclick="this.classList.toggle('checked')"><div class="check-box">✓</div><div class="check-label">🪧 Wants Yard Sign</div></div>
+    </div>
+
+    <span class="field-label">Notes</span>
+    <textarea class="field-input" id="fv-notes" rows="2" placeholder="Any notes…" style="resize:none;"></textarea>
+
+    <div style="display:flex;gap:10px;margin-top:12px;">
+      <button class="door-save-btn" onclick="saveFvEdit()">Save</button>
+      <button class="door-cancel-btn" onclick="closeFvEdit()">Cancel</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
