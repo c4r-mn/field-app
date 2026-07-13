@@ -74,10 +74,7 @@
       <span style="font-size:11px;font-weight:700;color:var(--muted);">Type:</span>
       <div class="filter-pill active" data-type="house" onclick="toggleType('house')">House <span class="pill-count" id="count-house">0</span></div>
       <div class="filter-pill active" data-type="townhome" onclick="toggleType('townhome')">Townhome <span class="pill-count" id="count-townhome">0</span></div>
-      <div class="filter-pill active" data-type="twin-home" onclick="toggleType('twin-home')">Twin Home <span class="pill-count" id="count-twin-home">0</span></div>
-      <div class="filter-pill active" data-type="duplex" onclick="toggleType('duplex')">Duplex <span class="pill-count" id="count-duplex">0</span></div>
-      <div class="filter-pill active" data-type="triplex" onclick="toggleType('triplex')">Triplex <span class="pill-count" id="count-triplex">0</span></div>
-      <div class="filter-pill active" data-type="quadplex" onclick="toggleType('quadplex')">Quadplex <span class="pill-count" id="count-quadplex">0</span></div>
+      <div class="filter-pill active" data-type="multi-family" onclick="toggleType('multi-family')">Multi-Family <span class="pill-count" id="count-multi-family">0</span></div>
       <div class="filter-pill active" data-type="condo" onclick="toggleType('condo')">Condo <span class="pill-count" id="count-condo">0</span></div>
       <div class="filter-pill active" data-type="apartment" onclick="toggleType('apartment')">Apartment <span class="pill-count" id="count-apartment">0</span></div>
       <div class="filter-pill active" data-type="senior" onclick="toggleType('senior')">55+ Community <span class="pill-count" id="count-senior">0</span></div>
@@ -121,7 +118,7 @@ var activeDate = 'all';
 var activeHood = 'all';
 var canvasRenderer = null;
 var showFilters = {completed:true,'not-knocked':true,upcoming:true,nosolic:true,contact:true};
-var typeFilters = {house:true,townhome:true,'twin-home':true,duplex:true,triplex:true,quadplex:true,condo:true,apartment:true,senior:true,assisted:true,'skilled-nursing':true,mobile:true,church:true};
+var typeFilters = {house:true,townhome:true,'multi-family':true,condo:true,apartment:true,senior:true,assisted:true,'skilled-nursing':true,mobile:true,church:true};
 var mapMarkers = {};
 var today = new Date().toISOString().slice(0,10);
 
@@ -132,10 +129,7 @@ var RESULT_COLORS = {
 var PROP_META_FV = {
   house:            {label:'House',            color:'#27ae60'},
   townhome:         {label:'Townhome',         color:'#16a34a'},
-  'twin-home':      {label:'Twin Home',        color:'#65a30d'},
-  duplex:           {label:'Duplex',           color:'#0d9488'},
-  triplex:          {label:'Triplex',          color:'#0891b2'},
-  quadplex:         {label:'Quadplex',         color:'#0369a1'},
+  'multi-family':   {label:'Multi-Family',     color:'#0d9488'},
   condo:            {label:'Condo',            color:'#0891b2'},
   apartment:        {label:'Apartment',        color:'#2563eb'},
   senior:           {label:'55+ Community',    color:'#d97706'},
@@ -341,7 +335,7 @@ function refreshFieldMarkers() {
   Object.values(mapMarkers).forEach(function(m){ fieldMap.removeLayer(m); });
   mapMarkers = {};
   var bounds = [];
-  var typeTally = {house:0,townhome:0,'twin-home':0,duplex:0,triplex:0,quadplex:0,condo:0,apartment:0,senior:0,assisted:0,'skilled-nursing':0,mobile:0,church:0};
+  var typeTally = {house:0,townhome:0,'multi-family':0,condo:0,apartment:0,senior:0,assisted:0,'skilled-nursing':0,mobile:0,church:0};
 
   // First pass: collect visible addresses, grouping apartment/condo units that
   // share a building coordinate so we render ONE marker per building instead
@@ -397,7 +391,7 @@ function typeBadgeHtml(addrType) {
   var meta = PROP_META_FV[addrType];
   var label = meta ? meta.label : (addrType.charAt(0).toUpperCase()+addrType.slice(1));
   var color = meta ? meta.color : '#888';
-  return '<span style="display:inline-block;font-size:9px;font-weight:800;color:#fff;background:'+color+';border-radius:6px;padding:2px 7px;margin-top:4px;maring-left: 2px">'+label+'</span>';
+  return '<span style="display:inline-block;font-size:9px;font-weight:800;color:#fff;background:'+color+';border-radius:6px;padding:2px 7px;margin-top:4px;">'+label+'</span>';
 }
 
 function renderSingleMarker(addr, log, isLogged, isUpcoming) {
