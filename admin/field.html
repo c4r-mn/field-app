@@ -81,7 +81,6 @@
       <div class="filter-pill active" data-type="assisted" onclick="toggleType('assisted')">Assisted Living <span class="pill-count" id="count-assisted">0</span></div>
       <div class="filter-pill active" data-type="skilled-nursing" onclick="toggleType('skilled-nursing')">Skilled Nursing <span class="pill-count" id="count-skilled-nursing">0</span></div>
       <div class="filter-pill active" data-type="mobile" onclick="toggleType('mobile')">Mobile Home Park <span class="pill-count" id="count-mobile">0</span></div>
-      <div class="filter-pill active" data-type="church" onclick="toggleType('church')">Church (skip) <span class="pill-count" id="count-church">0</span></div>
     </div>
 
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;font-weight:600;color:var(--muted);align-items:center;">
@@ -118,7 +117,7 @@ var activeDate = 'all';
 var activeHood = 'all';
 var canvasRenderer = null;
 var showFilters = {completed:true,'not-knocked':true,upcoming:true,nosolic:true,contact:true};
-var typeFilters = {house:true,townhome:true,'multi-family':true,condo:true,apartment:true,senior:true,assisted:true,'skilled-nursing':true,mobile:true,church:true};
+var typeFilters = {house:true,townhome:true,'multi-family':true,condo:true,apartment:true,senior:true,assisted:true,'skilled-nursing':true,mobile:true};
 var mapMarkers = {};
 var today = new Date().toISOString().slice(0,10);
 
@@ -136,7 +135,6 @@ var PROP_META_FV = {
   assisted:         {label:'Assisted Living',  color:'#e67e22'},
   'skilled-nursing':{label:'Skilled Nursing',  color:'#dc2626'},
   mobile:           {label:'Mobile Home Park', color:'#7c3aed'},
-  church:           {label:'Church',           color:'#a8a49a'},
 };
 var CONTACT_OPTIONS = ['Not Home','Vacant','For Sale','No Soliciting','Refused','Accepted','Other Language'];
 
@@ -335,7 +333,7 @@ function refreshFieldMarkers() {
   Object.values(mapMarkers).forEach(function(m){ fieldMap.removeLayer(m); });
   mapMarkers = {};
   var bounds = [];
-  var typeTally = {house:0,townhome:0,'multi-family':0,condo:0,apartment:0,senior:0,assisted:0,'skilled-nursing':0,mobile:0,church:0};
+  var typeTally = {house:0,townhome:0,'multi-family':0,condo:0,apartment:0,senior:0,assisted:0,'skilled-nursing':0,mobile:0};
 
   // First pass: collect visible addresses, grouping apartment/condo units that
   // share a building coordinate so we render ONE marker per building instead
