@@ -184,6 +184,11 @@
         </div>
         <div class="page-card" style="margin-bottom:12px;">
           <div class="page-card-title">Shift Details</div>
+          <div class="form-group" id="edit-date-group" style="display:none;">
+            <label class="form-label">Shift Date</label>
+            <input class="form-input" id="edit-date" type="date">
+            <div style="font-size:11px;color:var(--muted);margin-top:4px;">Changing this moves all assignments and buckets planned for this shift to the new date.</div>
+          </div>
           <div class="form-group">
             <label class="form-label">Shift Notes</label>
             <input class="form-input" id="edit-notes" type="text" placeholder="Shift notes...">
@@ -236,7 +241,6 @@ var PROP_META = {
   mobile:         {label:'Mobile Home Park',  color:'#7c3aed'},
   assisted:       {label:'Assisted Living',   color:'#e67e22'},
   'skilled-nursing': {label:'Skilled Nursing',color:'#dc2626'},
-  church:         {label:'Church',            color:'#a8a49a'},
 };
 var RESULT_COLORS = {
   'Not Home':'#64748b','Vacant':'#94a3b8','For Sale':'#7c3aed',
@@ -805,6 +809,13 @@ function toggleDanger() {
 }
 function buildDangerZone() {
   document.getElementById('edit-notes').value = shiftData.notes || '';
+  var dateGroup = document.getElementById('edit-date-group');
+  if (!isPastShift) {
+    dateGroup.style.display = 'block';
+    document.getElementById('edit-date').value = shiftDate;
+  } else {
+    dateGroup.style.display = 'none';
+  }
   var grid = document.getElementById('edit-vol-grid');
   grid.innerHTML = activeVols().map(function(v){
     var checked = (shiftData.volunteers||[]).indexOf(v.id)!==-1;
@@ -815,12 +826,65 @@ function buildDangerZone() {
 function saveShiftEdits() {
   var notes = document.getElementById('edit-notes').value.trim();
   var vols = Array.from(document.querySelectorAll('#edit-vol-grid .vol-check-item.checked')).map(function(el){return el.dataset.id;});
+  var dateEl = document.getElementById('edit-date');
+  var newDate = (!isPastShift && dateEl) ? dateEl.value : shiftDate;
+
+  if (newDate && newDate !== shiftDate) {
+    rescheduleShift(newDate, notes, vols);
+    return;
+  }
+
   shiftData.notes = notes;
   shiftData.volunteers = vols;
   fbPut('/canvass-days/'+shiftDate, shiftData).then(function(){
     buildCanvasserSelect();
     showToast('Shift details saved');
   }).catch(function(){showToast('Save failed');});
+}
+
+function rescheduleShift(newDate, notes, vols) {
+  if (!confirm('Move this shift from '+formatDate(shiftDate)+' to '+formatDate(newDate)+'? This moves all planned routes and buckets to the new date.')) {
+    document.getElementById('edit-date').value = shiftDate;
+    return;
+  }
+  var hood = shiftData.neighborhood;
+  var oldDate = shiftDate;
+
+  fbGet('/canvass-days/'+newDate).then(function(existing){
+    if (existing) {
+      showToast('A shift already exists on that date — pick a different date');
+      document.getElementById('edit-date').value = oldDate;
+      return Promise.reject('exists');
+    }
+    return Promise.all([
+      fbGet('/'+hood+'/assignments/'+oldDate),
+      fbGet('/'+hood+'/logs/'+oldDate),
+      fbGet('/'+hood+'/buckets/'+oldDate),
+    ]);
+  }).then(function(results){
+    var oldAssignments = results[0] || null;
+    var oldLogs = results[1] || null;
+    var oldBuckets = results[2] || null;
+
+    var updatedShiftData = Object.assign({}, shiftData, {notes: notes, volunteers: vols});
+
+    var writes = [fbPut('/canvass-days/'+newDate, updatedShiftData)];
+    if (oldAssignments) writes.push(fbPut('/'+hood+'/assignments/'+newDate, oldAssignments));
+    if (oldLogs) writes.push(fbPut('/'+hood+'/logs/'+newDate, oldLogs));
+    if (oldBuckets) writes.push(fbPut('/'+hood+'/buckets/'+newDate, oldBuckets));
+
+    return Promise.all(writes);
+  }).then(function(){
+    var deletes = [fbPut('/canvass-days/'+oldDate, null)];
+    deletes.push(fbPut('/'+hood+'/assignments/'+oldDate, null));
+    deletes.push(fbPut('/'+hood+'/logs/'+oldDate, null));
+    deletes.push(fbPut('/'+hood+'/buckets/'+oldDate, null));
+    return Promise.all(deletes);
+  }).then(function(){
+    window.location.href = 'shift.html?date='+newDate;
+  }).catch(function(err){
+    if (err !== 'exists') showToast('Reschedule failed — please try again');
+  });
 }
 function deleteShift() {
   if (!confirm('Delete shift for '+formatDate(shiftDate)+'? This cannot be undone.')) return;
