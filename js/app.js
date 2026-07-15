@@ -12,7 +12,6 @@ var PROP_META = {
   mobile:       { label:'Mobile Home Park',    color:'#7c3aed', callout:{cls:'mobile',icon:'🏘',text:'Mobile home park — coordinate with park management first.'} },
   assisted:     { label:'Assisted Living',     color:'#e67e22', callout:{cls:'assisted',icon:'🏥',text:'Assisted living — call before any visit.'} },
   'skilled-nursing': { label:'Skilled Nursing', color:'#dc2626', callout:{cls:'nursing',icon:'🏥',text:'Skilled nursing facility — call before any visit.'} },
-  church:       { label:'Church',              color:'#a8a49a', callout:{cls:'church',icon:'⛪',text:'This is a place of worship, not a residence — do not canvass.'} },
 };
 
 var CONTACT_COLORS = {
