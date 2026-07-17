@@ -229,7 +229,6 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
-<script src="../js/html2canvas.min.js"></script>
 <script src="/field-app/js/firebase.js"></script>
 <script src="/field-app/js/auth.js"></script>
 <script src="/field-app/js/data.js"></script>
@@ -981,14 +980,9 @@ function printWalkSheet() {
   if (!adminRoute.length) { showToast('No addresses in route'); return; }
 
   // Open the print window synchronously (right in the click handler) so
-  // popup blockers don't kill it — we fill in the content once the map
-  // screenshot is ready, which happens asynchronously.
+  // popup blockers don't kill it.
   var printWin = window.open('', '_blank');
-  if (printWin) {
-    printWin.document.write('<html><body style="font-family:sans-serif;padding:40px;color:#6b6860;">Generating walk sheet&hellip;</body></html>');
-  } else {
-    showToast('Allow popups to print');
-  }
+  if (!printWin) { showToast('Allow popups to print'); return; }
 
   var addrMap={};
   adminAddresses.forEach(function(a){addrMap[a.id]=a;});
@@ -1000,11 +994,16 @@ function printWalkSheet() {
   if (partnerId && partnerId!==currentCanvasserId) names += ' & '+volName(partnerId);
 
   // Build a QR code linking to live turn-by-turn directions in Google Maps
-  // (more reliable and more useful than a static map image)
   var gmWaypoints = sorted.slice(0,23).map(function(a){return a.lat+','+a.lng;}).join('/');
   var googleMapsUrl = 'https://www.google.com/maps/dir/'+gmWaypoints;
   var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='+encodeURIComponent(googleMapsUrl);
   var routeTruncated = sorted.length > 23;
+
+  // Route map data for the print window's OWN Leaflet instance — printing a
+  // real, browser-rendered map avoids the CORS/canvas-taint problems that
+  // made html2canvas screenshots unreliable for cross-origin map tiles.
+  var routePoints = sorted.map(function(a,i){ return {lat:a.lat, lng:a.lng, num:i+1}; });
+  var routePointsJson = JSON.stringify(routePoints);
 
   var typeLabels={senior:'55+ — Call first',apartment:'Apt — Coordinate',mobile:'Mobile — Coordinate',assisted:'Assisted — Call first'};
   var rows=sorted.map(function(addr,i){
@@ -1034,13 +1033,19 @@ function printWalkSheet() {
     +'.footer{margin-top:8px;padding-top:4px;border-top:1px solid #e0ddd3;font-size:7.5pt;color:#a8a49a;display:flex;justify-content:space-between;}'
     +'@media print{body{margin:0;}tr{page-break-inside:avoid;}img{page-break-after:avoid;}}';
 
+  var mapCss = '#walk-map{width:100%;height:75mm;border:1px solid #e0ddd3;border-radius:4px;margin-bottom:2px;}'
+    +'.wm-cap{font-size:7pt;color:#a8a49a;text-align:center;margin-bottom:10px;}'
+    +'.wm-num{background:#D4A832;color:#1A1A1A;border-radius:50%;width:16px;height:16px;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;border:1.5px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3);}';
+
   var body='<!DOCTYPE html><html><head><meta charset="UTF-8">'
     +'<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">'
-    +'<title>Walk Sheet</title><style>'+css+'</style></head><body>'
+    +'<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">'
+    +'<title>Walk Sheet</title><style>'+css+mapCss+'</style></head><body>'
     +'<div class="page">'
     +'<div class="hdr"><div class="hdr-l"><div class="camp">Cassie for Roseville &mdash; Field App</div><div class="title">Walk Sheet: '+names+'</div><div class="meta">'+hoodName+' &middot; '+formatDateLong(shiftDate)+'</div></div>'
     +'<div class="hdr-r"><div class="cnt">'+sorted.length+'</div><div class="lbl">Addresses</div></div></div>'
-    +'%%MAP_IMAGE%%'
+    +'<div id="walk-map"></div>'
+    +'<div class="wm-cap">Route map &middot; numbers correspond to list below</div>'
     +'<div style="margin-bottom:10px;display:flex;align-items:center;gap:12px;padding:8px;border:1px solid #e0ddd3;border-radius:6px;background:#faf8f4;">'
       +'<img src="'+qrUrl+'" style="width:80px;height:80px;flex-shrink:0;" />'
       +'<div style="font-size:8pt;color:#4b463a;">'
@@ -1051,34 +1056,29 @@ function printWalkSheet() {
     +'<table><thead><tr><th></th><th class="al">Address</th><th>Not Home</th><th>Vacant</th><th>For Sale</th><th>No Solic.</th><th>Refused</th><th>Accepted</th><th>Other</th><th style="text-align:left;padding-left:6px;">Notes / Contact / Sign</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table>'
     +'<div class="footer"><span>Cassie Iverson for Roseville City Council 2026 &middot; cassie4roseville.com</span><span>Printed '+new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</span></div>'
-    +'</div><script>window.onload=function(){window.print();};<\/script></body></html>';
+    +'</div>'
+    +'<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"><\/script>'
+    +'<script>'
+    +'var pts = '+routePointsJson+';'
+    +'var map = L.map("walk-map", {zoomControl:false, attributionControl:true});'
+    +'var tiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{attribution:"&copy; OpenStreetMap &copy; CARTO",subdomains:"abcd",maxZoom:20});'
+    +'tiles.addTo(map);'
+    +'var bounds = pts.map(function(p){return [p.lat,p.lng];});'
+    +'if (bounds.length) map.fitBounds(bounds, {padding:[15,15]});'
+    +'pts.forEach(function(p){'
+      +'var icon = L.divIcon({className:"",iconSize:[16,16],iconAnchor:[8,8],html:\'<div class="wm-num">\'+p.num+\'</div>\'});'
+      +'L.marker([p.lat,p.lng],{icon:icon}).addTo(map);'
+    +'});'
+    +'var printed = false;'
+    +'function doPrint(){ if (printed) return; printed = true; setTimeout(function(){ window.print(); }, 200); }'
+    +'tiles.on("load", doPrint);'
+    +'setTimeout(doPrint, 4000);' // fallback in case the load event doesn't fire
+    +'<\/script>'
+    +'</body></html>';
 
-  function finishPrint(mapImgHtml) {
-    var fullBody = body.replace('%%MAP_IMAGE%%', mapImgHtml || '');
-    if (printWin) {
-      printWin.document.open();
-      printWin.document.write(fullBody);
-      printWin.document.close();
-    }
-  }
-
-  // Capture the live route map (with numbered pins, as currently zoomed/panned)
-  var mapEl = document.getElementById('shift-map');
-  if (mapEl && typeof html2canvas === 'function') {
-    html2canvas(mapEl, {useCORS:true, logging:false, backgroundColor:'#f0ede4'}).then(function(canvas) {
-      var dataUrl = canvas.toDataURL('image/png');
-      var mapImgHtml = '<div style="margin-bottom:10px;">'
-        +'<img src="'+dataUrl+'" style="width:100%;height:auto;border:1px solid #e0ddd3;border-radius:4px;display:block;" />'
-        +'<div style="font-size:7pt;color:#a8a49a;text-align:center;margin-top:2px;">Route map &middot; numbers correspond to list below</div>'
-        +'</div>';
-      finishPrint(mapImgHtml);
-    }).catch(function(e) {
-      // Map capture failed (e.g. tile CORS issue) — print without it rather than fail entirely
-      finishPrint('');
-    });
-  } else {
-    finishPrint('');
-  }
+  printWin.document.open();
+  printWin.document.write(body);
+  printWin.document.close();
 }
 
 var _tt;
