@@ -131,6 +131,22 @@
           </div>
         </div>
       </div>
+
+      <div class="page-card" style="margin-bottom:16px;">
+        <div class="page-card-title">Log Meet &amp; Greet (Whole Building)</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">
+          For an event instead of door-knocking — marks every unit in the building as Accepted, credited to the selected canvasser on this shift's date.
+        </div>
+        <div class="form-row" style="margin-bottom:10px;">
+          <div class="form-col">
+            <label class="form-label">Building</label>
+            <select class="form-input" id="mg-building-select">
+              <option value="">— Select a building —</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-gold btn-sm" onclick="logMeetGreet()">Mark All Units Accepted</button>
+      </div>
     </div>
 
     <!-- Stats (shown once addresses are logged) -->
@@ -273,6 +289,7 @@ function loadShift() {
       document.getElementById('direct-panel').style.display = 'block';
     }
     adminAddresses = (window.NEIGHBORHOOD_DATA&&window.NEIGHBORHOOD_DATA[shiftData.neighborhood])||[];
+    populateMeetGreetBuildings();
 
     Promise.all([
       fbGet('/'+shiftData.neighborhood+'/assignments/'+shiftDate),
@@ -334,6 +351,73 @@ function buildCanvasserSelect() {
     sel.value = vols[0];
     onCanvasserChange();
   }
+}
+
+// ── MEET & GREET (WHOLE BUILDING) ──────────────────────────────────────────
+var MEET_GREET_TYPES_SHIFT = {apartment:true, condo:true, senior:true, assisted:true, 'skilled-nursing':true, mobile:true};
+var mgBuildingGroups = {};
+
+function populateMeetGreetBuildings() {
+  var sel = document.getElementById('mg-building-select');
+  if (!sel) return;
+  mgBuildingGroups = {};
+  adminAddresses.forEach(function(addr){
+    var t = addr.t || 'house';
+    if (!MEET_GREET_TYPES_SHIFT[t]) return;
+    var key = addr.lat.toFixed(6)+','+addr.lng.toFixed(6);
+    if (!mgBuildingGroups[key]) mgBuildingGroups[key] = [];
+    mgBuildingGroups[key].push(addr);
+  });
+
+  var keys = Object.keys(mgBuildingGroups).sort(function(a,b){
+    var ua = mgBuildingGroups[a][0], ub = mgBuildingGroups[b][0];
+    return (ua.n+ua.s).localeCompare(ub.n+ub.s);
+  });
+
+  sel.innerHTML = '<option value="">— Select a building —</option>';
+  keys.forEach(function(key){
+    var units = mgBuildingGroups[key];
+    var first = units[0];
+    var meta = PROP_META[first.t] || {label: first.t};
+    var o = document.createElement('option');
+    o.value = key;
+    o.textContent = first.n+' '+first.s+' \u00b7 '+units.length+' units \u00b7 '+meta.label;
+    sel.appendChild(o);
+  });
+}
+
+function logMeetGreet() {
+  if (!currentCanvasserId) { showToast('Select a canvasser to credit this event to'); return; }
+  var key = document.getElementById('mg-building-select').value;
+  if (!key) { showToast('Select a building'); return; }
+  var units = mgBuildingGroups[key];
+  if (!units || !units.length) return;
+  var first = units[0];
+  var label = first.n+' '+first.s+' ('+units.length+' units)';
+
+  if (!confirm('Mark all '+units.length+' units at '+label+' as Accepted for '+formatDate(shiftDate)+', credited to '+volName(currentCanvasserId)+'? This overwrites any existing results for those units on this date.')) return;
+
+  var nowIso = new Date().toISOString();
+  var writes = units.map(function(u){
+    var logEntry = {
+      contact: 'Accepted',
+      litLeft: false, wantContact: false, stopBy: false, wantSign: false, visitAgain: false,
+      name: '', lastname: '', phone: '', email: '',
+      notes: 'Meet & Greet event',
+      canvasser: volName(currentCanvasserId),
+      volId: currentCanvasserId,
+      time: nowIso,
+      isEvent: true,
+    };
+    return fbPut('/'+shiftData.neighborhood+'/logs/'+shiftDate+'/'+currentCanvasserId+'/'+u.id, logEntry);
+  });
+
+  Promise.all(writes).then(function(){
+    showToast('Logged Meet & Greet for '+units.length+' units');
+    if (isPastShift) { setTimeout(function(){ initOrRefreshMap(); renderStats(); }, 30); }
+  }).catch(function(){
+    showToast('Some units failed to save — please check and retry');
+  });
 }
 
 function onCanvasserChange() {
