@@ -359,6 +359,7 @@ function refreshFieldMarkers() {
       if (MULTI_UNIT_TYPES[addrType]) {
         var key = addr.lat.toFixed(6)+','+addr.lng.toFixed(6);
         if (!buildingGroups[key]) buildingGroups[key] = [];
+        addr.hoodKey = n.key; // needed later for bulk meet & greet writes
         buildingGroups[key].push(addr);
       } else {
         renderSingleMarker(addr, log, isLogged, isUpcoming);
@@ -433,6 +434,9 @@ function renderSingleMarker(addr, log, isLogged, isUpcoming) {
   mapMarkers[addr.id] = marker;
 }
 
+var MEET_GREET_TYPES = {apartment:true, condo:true, senior:true, assisted:true, 'skilled-nursing':true, mobile:true};
+var buildingUnitsStore = {};
+
 function renderBuildingMarker(units) {
   var first = units[0];
   var unitCount = units.length;
@@ -455,6 +459,10 @@ function renderBuildingMarker(units) {
     weight: 1.5,
   }).addTo(fieldMap);
 
+  var buildingKey = first.id;
+  buildingUnitsStore[buildingKey] = units;
+  var canMeetGreet = MEET_GREET_TYPES[first.t];
+
   marker.bindPopup(function() {
     var popup = '<div style="min-width:210px;padding:6px 2px;">';
     popup += '<strong>'+first.n+' '+first.s+'</strong>';
@@ -462,12 +470,60 @@ function renderBuildingMarker(units) {
     popup += '<div style="margin-top:8px;font-size:12px;line-height:1.6;">';
     popup += '<strong>'+unitCount+' units</strong> &middot; '+loggedCount+' logged<br>';
     popup += '</div>';
+    if (canMeetGreet) {
+      popup += '<button onclick="openMeetGreet(\''+buildingKey+'\')" style="margin-top:6px;font-size:11px;font-weight:700;padding:6px 12px;background:#D4A832;border:none;border-radius:5px;cursor:pointer;width:100%;">Log Meet &amp; Greet (all units)</button>';
+    }
     popup += '<div style="margin-top:6px;font-size:11px;color:var(--subtle,#a8a49a);">Open this building\'s shift to log or edit individual units.</div>';
     popup += '</div>';
     return popup;
   });
 
   units.forEach(function(u){ mapMarkers[u.id] = marker; });
+}
+
+function openMeetGreet(buildingKey) {
+  var units = buildingUnitsStore[buildingKey];
+  if (!units || !units.length) return;
+  var first = units[0];
+  var label = first.n+' '+first.s+' ('+units.length+' units)';
+  var today = new Date();
+  var todayStr = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+
+  var dateInput = prompt('Log a Meet & Greet for ALL '+units.length+' units at '+label+'.\n\nEvery unit will be marked Accepted.\n\nEvent date (YYYY-MM-DD):', todayStr);
+  if (!dateInput) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) { showToast('Enter date as YYYY-MM-DD'); return; }
+
+  if (!confirm('Mark all '+units.length+' units at '+label+' as Accepted for '+dateInput+'? This cannot be easily undone in bulk.')) return;
+
+  var hoodKey = first.hoodKey;
+  var nowIso = new Date().toISOString();
+  var writes = units.map(function(u){
+    var logEntry = {
+      contact: 'Accepted',
+      litLeft: false,
+      wantContact: false,
+      stopBy: false,
+      wantSign: false,
+      visitAgain: false,
+      name: '', lastname: '', phone: '', email: '',
+      notes: 'Meet & Greet event',
+      canvasser: 'Meet & Greet Event',
+      volId: 'meet-greet',
+      time: nowIso,
+      isEvent: true,
+    };
+    return fbPut('/'+hoodKey+'/logs/'+dateInput+'/meet-greet/'+u.id, logEntry).then(function(){
+      allLogs[u.id] = Object.assign({}, logEntry, {date: dateInput, volId: 'meet-greet', hoodKey: hoodKey});
+    });
+  });
+
+  Promise.all(writes).then(function(){
+    showToast('Logged Meet & Greet for '+units.length+' units');
+    refreshFieldMarkers();
+  }).catch(function(){
+    showToast('Some units failed to save — please check and retry');
+    refreshFieldMarkers();
+  });
 }
 
 function exportList(type) {
