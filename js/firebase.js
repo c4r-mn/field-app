@@ -9,7 +9,20 @@ function setFbBase() {
 }
 
 function fbFetch(path, opts) {
-  return fetch(fbBase + path + '.json', opts || {});
+  // Every request must carry the signed-in user's ID token as ?auth=...
+  // or Firebase's REST API treats it as anonymous — this was previously
+  // missing entirely, which worked only because old test-mode rules didn't
+  // check auth status at all. Real rules require this.
+  var user = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
+  var tokenPromise = user ? user.getIdToken(false) : Promise.resolve(null);
+
+  return tokenPromise.then(function(token) {
+    var url = fbBase + path + '.json';
+    if (token) {
+      url += (url.indexOf('?') === -1 ? '?' : '&') + 'auth=' + encodeURIComponent(token);
+    }
+    return fetch(url, opts || {});
+  });
 }
 function fbGet(path) {
   return fbFetch(path).then(function(r) { return r.json(); });
