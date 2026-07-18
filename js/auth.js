@@ -88,7 +88,7 @@ function startFirebase(onAdmin, onCanvasser) {
     var pw = (document.getElementById('auth-password') || {}).value || '';
     if (!email || !pw) { showAuthMsg('Enter your email and password.', true); return; }
     showAuthMsg('Signing in…');
-    auth.signInWithEmailAndPassword(email.trim(), pw).catch(function(e) {
+    auth.signInWithEmailAndPassword(email.trim(), pw.trim()).catch(function(e) {
       // TEMPORARY DIAGNOSTIC — impossible-to-miss popup version.
       alert('SIGN-IN ERROR\n\nCode: ' + e.code + '\n\nMessage: ' + e.message);
       showAuthMsg(friendlyError(e.code), true);
@@ -151,25 +151,44 @@ function startFirebase(onAdmin, onCanvasser) {
     // Check roster access for canvassers
     if (!isAdmin) {
       if (typeof setFbBase === 'function') setFbBase();
-      fbGet('/roster').then(function(roster) {
-        var found = false;
-        var targetEmail = email.trim().toLowerCase();
-        if (roster && typeof roster === 'object') {
-          Object.values(roster).forEach(function(v) {
-            if (!v) return;
-            var rawEmail = v.email || v.Email || v.EMAIL || '';
-            if (rawEmail && rawEmail.trim().toLowerCase() === targetEmail) found = true;
-          });
-        }
-        if (!found) {
-          auth.signOut();
-          window.location.href = '/field-app/?denied=1&email='+encodeURIComponent(email);
-          return;
-        }
-        if (typeof onCanvasser === 'function') onCanvasser(_currentUser);
-        else if (!window.location.pathname.includes('/canvass')) window.location.href = '/field-app/canvass.html';
-      }).catch(function() {
-        if (typeof onCanvasser === 'function') onCanvasser(_currentUser);
+      var targetEmail = email.trim().toLowerCase();
+      user.getIdToken(false).then(function(tok) {
+        var tokenInfo = tok ? ('YES, length '+tok.length) : 'NO TOKEN';
+        return fbGet('/roster').then(function(roster) {
+          var found = false;
+          var seenEmails = [];
+          if (roster && typeof roster === 'object') {
+            Object.values(roster).forEach(function(v) {
+              if (!v) return;
+              var rawEmail = v.email || v.Email || v.EMAIL || '';
+              if (rawEmail) seenEmails.push(rawEmail);
+              if (rawEmail && rawEmail.trim().toLowerCase() === targetEmail) found = true;
+            });
+          }
+          // TEMPORARY DIAGNOSTIC — one comprehensive popup, remove once resolved.
+          alert('ROSTER CHECK DEBUG\n\n'
+            + 'Signed in as: ' + email + '\n'
+            + 'Got ID token: ' + tokenInfo + '\n'
+            + 'Roster fetch: SUCCEEDED\n'
+            + 'Roster type: ' + (typeof roster) + '\n'
+            + 'Emails in roster (' + seenEmails.length + '): ' + JSON.stringify(seenEmails) + '\n'
+            + 'Match found: ' + found);
+          if (!found) {
+            auth.signOut();
+            window.location.href = '/field-app/?denied=1&email='+encodeURIComponent(email);
+            return;
+          }
+          if (typeof onCanvasser === 'function') onCanvasser(_currentUser);
+          else if (!window.location.pathname.includes('/canvass')) window.location.href = '/field-app/canvass.html';
+        }).catch(function(err) {
+          // TEMPORARY DIAGNOSTIC
+          alert('ROSTER CHECK DEBUG\n\n'
+            + 'Signed in as: ' + email + '\n'
+            + 'Got ID token: ' + tokenInfo + '\n'
+            + 'Roster fetch: FAILED\n'
+            + 'Error: ' + (err && err.message ? err.message : err));
+          if (typeof onCanvasser === 'function') onCanvasser(_currentUser);
+        });
       });
     } else {
       if (typeof onAdmin === 'function') onAdmin(_currentUser);
