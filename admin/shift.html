@@ -972,7 +972,7 @@ function rescheduleShift(newDate, notes, vols) {
     deletes.push(fbPut('/'+hood+'/buckets/'+oldDate, null));
     return Promise.all(deletes);
   }).then(function(){
-    window.location.href = 'shift.html?date='+newDate;
+    window.location.href = 'shift.html?date=' + encodeURIComponent(newDate);
   }).catch(function(err){
     if (err !== 'exists') showToast('Reschedule failed — please try again');
   });
