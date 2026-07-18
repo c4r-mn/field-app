@@ -58,7 +58,12 @@
     var denyEl = document.getElementById('access-denied');
     denyEl.style.display = 'block';
     if (deniedEmail) {
-      denyEl.innerHTML = "You don't have access to this app.<br>Signed in as: <strong>"+deniedEmail+"</strong><br>Contact the campaign manager.";
+      denyEl.innerHTML = "You don't have access to this app.<br>Signed in as: ";
+      var deniedEmailStrong = document.createElement('strong');
+      deniedEmailStrong.textContent = deniedEmail;
+      denyEl.appendChild(deniedEmailStrong);
+      denyEl.appendChild(document.createElement('br'));
+      denyEl.appendChild(document.createTextNode('Contact the campaign manager.'));
     }
     document.getElementById('auth-form').style.display = 'none';
   }
