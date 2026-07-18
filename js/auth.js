@@ -75,9 +75,9 @@ function startFirebase(onAdmin, onCanvasser) {
     if (!email || !pw) { showAuthMsg('Enter your email and password.', true); return; }
     showAuthMsg('Signing in…');
     auth.signInWithEmailAndPassword(email.trim(), pw).catch(function(e) {
-      // TEMPORARY DIAGNOSTIC — showing the raw Firebase error code to
-      // pin down a persistent 400 on signInWithPassword. Remove once resolved.
-      showAuthMsg(friendlyError(e.code) + '  [code: ' + e.code + ']', true);
+      // TEMPORARY DIAGNOSTIC — impossible-to-miss popup version.
+      alert('SIGN-IN ERROR\n\nCode: ' + e.code + '\n\nMessage: ' + e.message);
+      showAuthMsg(friendlyError(e.code), true);
     });
   };
 
