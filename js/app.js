@@ -712,29 +712,6 @@ function goLogin() { if(typeof doSignOut==='function') doSignOut(); }
 
 
 // ── ROSTER ────────────────────────────────
-function loadRoster() {
-  return fbGet('/roster').then(function(d){
-    if (d && typeof d==='object' && Object.keys(d).length > 0) {
-      roster = d;
-    } else {
-      // First run — seed from INITIAL_ROSTER
-      roster = {};
-      var promises = INITIAL_ROSTER.map(function(v){
-        var id = genId();
-        roster[id] = {name:v.name, status:v.status, added:todayKey};
-        return fbPut('/roster/'+id, roster[id]);
-      });
-      return Promise.all(promises);
-    }
-  }).catch(function(){ roster = {}; });
-}
-
-function loadCanvassDays() {
-  return fbGet('/canvass-days').then(function(d){
-    canvassDays = (d && typeof d==='object') ? d : {};
-  }).catch(function(){ canvassDays = {}; });
-}
-
 // ── ROSTER MANAGEMENT ─────────────────────
 function showAdminScreen() {
   document.getElementById('admin-screen').style.display='flex';
