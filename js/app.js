@@ -51,12 +51,15 @@ function initFirebaseCanvasser() {
   document.getElementById('setup-fields').style.display='none';
   document.getElementById('setup-btn').disabled = true;
 
-  fbGet('/.json?shallow=true')
+  // Previously did a root-level shallow read here as a connectivity check,
+  // but our security rules only grant access on specific child paths
+  // (roster, canvass-days, etc.) — a root read has no matching rule and
+  // can be denied/behave inconsistently. loadRoster()/loadCanvassDays()
+  // below already double as the connectivity check, on paths that do
+  // have clear rules.
+  Promise.all([loadRoster(), loadCanvassDays()])
     .then(function(){
       fbConnected = true;
-      return Promise.all([loadRoster(), loadCanvassDays()]);
-    })
-    .then(function(){
       document.getElementById('setup-loading').style.display='none';
       document.getElementById('setup-fields').style.display='flex';
       buildSetupSelects();
