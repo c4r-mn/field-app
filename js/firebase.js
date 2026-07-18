@@ -16,7 +16,15 @@ function fbFetch(path, opts) {
   var user = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
   var tokenPromise = user ? user.getIdToken(false) : Promise.resolve(null);
 
-  return tokenPromise.then(function(token) {
+  // Safety timeout — if getIdToken() ever stalls (seen intermittently on
+  // some mobile/network conditions), don't hang the whole app forever
+  // with no error. Fall back to an unauthenticated request after 8s so
+  // the request at least resolves (and fails cleanly) instead of hanging.
+  var timeoutPromise = new Promise(function(resolve) {
+    setTimeout(function() { resolve(null); }, 8000);
+  });
+
+  return Promise.race([tokenPromise, timeoutPromise]).then(function(token) {
     var url = fbBase + path + '.json';
     if (token) {
       url += (url.indexOf('?') === -1 ? '?' : '&') + 'auth=' + encodeURIComponent(token);
