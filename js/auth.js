@@ -75,7 +75,9 @@ function startFirebase(onAdmin, onCanvasser) {
     if (!email || !pw) { showAuthMsg('Enter your email and password.', true); return; }
     showAuthMsg('Signing in…');
     auth.signInWithEmailAndPassword(email.trim(), pw).catch(function(e) {
-      showAuthMsg(friendlyError(e.code), true);
+      // TEMPORARY DIAGNOSTIC — showing the raw Firebase error code to
+      // pin down a persistent 400 on signInWithPassword. Remove once resolved.
+      showAuthMsg(friendlyError(e.code) + '  [code: ' + e.code + ']', true);
     });
   };
 
@@ -86,14 +88,41 @@ function startFirebase(onAdmin, onCanvasser) {
   };
 
   // Auth state
+  // Firebase can fire this callback once with a transient null before it
+  // finishes checking persisted login state, then fire again shortly after
+  // with the real signed-in user — this shows up mostly on mobile, where
+  // storage reads are slower. Acting on that first null bounces someone
+  // who is actually still validly signed in, causing a redirect loop.
+  // Fix: don't redirect away on null until we've seen auth settle at least
+  // once, and give one grace check before treating it as a real sign-out.
+  var authSeenOnce = false;
+  var pendingNullRedirect = null;
+
   auth.onAuthStateChanged(function(user) {
     updateUserBar(user);
+
     if (!user) {
-      if (window.location.pathname !== '/field-app/' && window.location.pathname !== '/field-app/index.html') {
-        window.location.href = '/field-app/';
+      if (pendingNullRedirect) clearTimeout(pendingNullRedirect);
+      var alreadyOnLogin = window.location.pathname === '/field-app/' || window.location.pathname === '/field-app/index.html';
+      if (alreadyOnLogin) { authSeenOnce = true; return; }
+
+      if (!authSeenOnce) {
+        // First callback ever and it's null — could be the transient
+        // pre-restore state. Wait briefly for a possible follow-up
+        // callback with the real user before redirecting away.
+        pendingNullRedirect = setTimeout(function() {
+          if (!auth.currentUser) window.location.href = '/field-app/';
+        }, 800);
+        authSeenOnce = true;
+        return;
       }
+
+      window.location.href = '/field-app/';
       return;
     }
+
+    authSeenOnce = true;
+    if (pendingNullRedirect) { clearTimeout(pendingNullRedirect); pendingNullRedirect = null; }
 
     var email = user.email || '';
     if (!email) {
@@ -110,9 +139,12 @@ function startFirebase(onAdmin, onCanvasser) {
       if (typeof setFbBase === 'function') setFbBase();
       fbGet('/roster').then(function(roster) {
         var found = false;
+        var targetEmail = email.trim().toLowerCase();
         if (roster && typeof roster === 'object') {
           Object.values(roster).forEach(function(v) {
-            if (v && v.email && v.email.toLowerCase() === email.toLowerCase()) found = true;
+            if (!v) return;
+            var rawEmail = v.email || v.Email || v.EMAIL || '';
+            if (rawEmail && rawEmail.trim().toLowerCase() === targetEmail) found = true;
           });
         }
         if (!found) {
