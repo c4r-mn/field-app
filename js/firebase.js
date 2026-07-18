@@ -1,65 +1,84 @@
-// Cassie for Roseville — Field App
-// Firebase helpers — shared across all pages
+// Cassie for Roseville — Field App Service Worker
+var CACHE = 'c4r-v20';
 
-var fbBase = '';
-var fbConnected = false;
+// Only precache truly static assets — HTML is always network-first below,
+// so precaching it here just adds a fragile install-time dependency.
+var STATIC = [
+  '/field-app/css/app.css',
+  '/field-app/js/app.js',
+  '/field-app/js/auth.js',
+  '/field-app/js/firebase.js',
+  '/field-app/js/data.js',
+];
 
-function setFbBase() {
-  fbBase = (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.databaseURL) || '';
-}
+self.addEventListener('install', function(e) {
+  e.waitUntil(
+    caches.open(CACHE).then(function(c) {
+      return c.addAll(STATIC).catch(function(err) {
+        // Don't let one failed asset kill the whole install
+        console.warn('SW precache warning:', err);
+      });
+    })
+  );
+  self.skipWaiting();
+});
 
-function fbFetch(path, opts) {
-  // Every request must carry the signed-in user's ID token as ?auth=...
-  // or Firebase's REST API treats it as anonymous — this was previously
-  // missing entirely, which worked only because old test-mode rules didn't
-  // check auth status at all. Real rules require this.
-  var user = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
-  var tokenPromise = user ? user.getIdToken(false) : Promise.resolve(null);
+self.addEventListener('activate', function(e) {
+  e.waitUntil(
+    caches.keys().then(function(keys) {
+      return Promise.all(keys.filter(function(k){ return k !== CACHE; }).map(function(k){ return caches.delete(k); }));
+    })
+  );
+  self.clients.claim();
+});
 
-  // Safety timeout — if getIdToken() ever stalls (seen intermittently on
-  // some mobile/network conditions), don't hang the whole app forever
-  // with no error. Fall back to an unauthenticated request after 8s so
-  // the request at least resolves (and fails cleanly) instead of hanging.
-  var timeoutPromise = new Promise(function(resolve) {
-    setTimeout(function() { resolve(null); }, 8000);
-  });
+self.addEventListener('fetch', function(e) {
+  if (!e.request.url.startsWith('http')) return;
+  if (e.request.url.indexOf('firebase') !== -1 ||
+      e.request.url.indexOf('google') !== -1 ||
+      e.request.url.indexOf('config.json') !== -1) {
+    return;
+  }
 
-  return Promise.race([tokenPromise, timeoutPromise]).then(function(token) {
-    var url = fbBase + path + '.json';
-    if (token) {
-      url += (url.indexOf('?') === -1 ? '?' : '&') + 'auth=' + encodeURIComponent(token);
-    }
-    return fetch(url, opts || {});
-  });
-}
-function fbGet(path) {
-  return fbFetch(path).then(function(r) { return r.json(); });
-}
-function fbPut(path, data) {
-  return fbFetch(path, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  });
-}
-function fbPatch(path, data) {
-  return fbFetch(path, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  });
-}
-function genId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-}
-function formatDate(dateStr) {
-  var d = new Date(dateStr + 'T12:00:00');
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
-function formatDateLong(dateStr) {
-  var d = new Date(dateStr + 'T12:00:00');
-  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-}
-function todayKey() {
-  return new Date().toISOString().slice(0, 10);
-}
+  var isHtml = e.request.mode === 'navigate' ||
+    e.request.url.endsWith('.html') || e.request.url.endsWith('/');
+
+  if (isHtml) {
+    // Always go to network for HTML — never serve stale pages.
+    // IMPORTANT: respondWith() requires a real Response, always. The old
+    // fallback chain could resolve to undefined (since we don't cache any
+    // HTML), which throws "Failed to convert value to 'Response'" and
+    // hard-fails the whole navigation — this was likely behind at least
+    // some of the mysterious reload/bounce behavior seen on mobile.
+    e.respondWith(
+      fetch(e.request).catch(function() {
+        return caches.match(e.request);
+      }).then(function(r) {
+        if (r) return r;
+        return caches.match('/field-app/');
+      }).then(function(r) {
+        if (r) return r;
+        // Nothing usable anywhere — return a real (if minimal) Response
+        // instead of undefined, so the browser doesn't hard-fail.
+        return new Response(
+          '<html><body style="font-family:sans-serif;padding:40px;">' +
+          'Connection lost. <a href="/field-app/">Try again</a>.</body></html>',
+          {status: 503, headers: {'Content-Type': 'text/html'}}
+        );
+      })
+    );
+    return;
+  }
+
+  // JS/CSS: cache-first, refresh in background
+  e.respondWith(
+    caches.match(e.request).then(function(cached) {
+      var fetchPromise = fetch(e.request).then(function(resp) {
+        var clone = resp.clone();
+        caches.open(CACHE).then(function(c){ c.put(e.request, clone); });
+        return resp;
+      }).catch(function(){ return cached; });
+      return cached || fetchPromise;
+    })
+  );
+});
