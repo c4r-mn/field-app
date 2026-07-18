@@ -1,5 +1,5 @@
 // Cassie for Roseville — Field App Service Worker
-var CACHE = 'c4r-v15';
+var CACHE = 'c4r-v19';
 
 // Only precache truly static assets — HTML is always network-first below,
 // so precaching it here just adds a fragile install-time dependency.
@@ -44,12 +44,27 @@ self.addEventListener('fetch', function(e) {
     e.request.url.endsWith('.html') || e.request.url.endsWith('/');
 
   if (isHtml) {
-    // Always go to network for HTML — never serve stale pages
+    // Always go to network for HTML — never serve stale pages.
+    // IMPORTANT: respondWith() requires a real Response, always. The old
+    // fallback chain could resolve to undefined (since we don't cache any
+    // HTML), which throws "Failed to convert value to 'Response'" and
+    // hard-fails the whole navigation — this was likely behind at least
+    // some of the mysterious reload/bounce behavior seen on mobile.
     e.respondWith(
       fetch(e.request).catch(function() {
-        return caches.match(e.request).then(function(r) {
-          return r || caches.match('/field-app/');
-        });
+        return caches.match(e.request);
+      }).then(function(r) {
+        if (r) return r;
+        return caches.match('/field-app/');
+      }).then(function(r) {
+        if (r) return r;
+        // Nothing usable anywhere — return a real (if minimal) Response
+        // instead of undefined, so the browser doesn't hard-fail.
+        return new Response(
+          '<html><body style="font-family:sans-serif;padding:40px;">' +
+          'Connection lost. <a href="/field-app/">Try again</a>.</body></html>',
+          {status: 503, headers: {'Content-Type': 'text/html'}}
+        );
       })
     );
     return;
