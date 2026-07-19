@@ -92,23 +92,39 @@ function initFirebase() {
 // ── ROSTER ────────────────────────────────
 var ROSTER_CACHE_KEY = 'c4r_roster_cache_v1';
 
+function loadRosterAttempt() {
+  return fbGet('/roster');
+}
+
 function loadRoster() {
-  return fbGet('/roster').then(function(d){
-    if (d && typeof d==='object' && Object.keys(d).length > 0) {
-      roster = d;
-      // Save a local "last known good" copy — self-maintaining fallback,
-      // always reflects whatever was most recently managed in the Roster
-      // admin page. No manual updates needed, ever.
-      try { localStorage.setItem(ROSTER_CACHE_KEY, JSON.stringify(d)); } catch (e) {}
-    } else {
-      // Live fetch came back empty/null — before, this crashed trying to
-      // reference a non-existent INITIAL_ROSTER variable, which silently
-      // resulted in an empty roster with no warning. Now: fall back to the
-      // last successfully cached roster on this device, if we have one.
+  function tryLoad(attemptsLeft) {
+    return loadRosterAttempt().then(function(d){
+      if (d && typeof d==='object' && Object.keys(d).length > 0) {
+        roster = d;
+        // Save a local "last known good" copy — self-maintaining fallback,
+        // always reflects whatever was most recently managed in the Roster
+        // admin page. No manual updates needed, ever.
+        try { localStorage.setItem(ROSTER_CACHE_KEY, JSON.stringify(d)); } catch (e) {}
+        return;
+      }
+      // Empty/null response — retry a couple times with a short delay
+      // before falling back, since this has shown to sometimes be a
+      // transient Firebase read timing issue rather than genuinely empty.
+      if (attemptsLeft > 0) {
+        return new Promise(function(resolve){ setTimeout(resolve, 1200); }).then(function(){
+          return tryLoad(attemptsLeft - 1);
+        });
+      }
       var cached = null;
       try { cached = localStorage.getItem(ROSTER_CACHE_KEY); } catch (e) {}
       roster = cached ? JSON.parse(cached) : {};
-    }
+    });
+  }
+  // Small initial delay — a token issued moments ago (fresh sign-in) may
+  // not have fully settled with the database backend on the very first
+  // read attempt. This is cheap insurance before we even try once.
+  return new Promise(function(resolve){ setTimeout(resolve, 500); }).then(function(){
+    return tryLoad(5);
   }).catch(function(){
     var cached = null;
     try { cached = localStorage.getItem(ROSTER_CACHE_KEY); } catch (e) {}
