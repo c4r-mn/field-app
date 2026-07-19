@@ -188,6 +188,12 @@ function startFirebase(onAdmin, onCanvasser) {
           return user.getIdToken(true).then(function(){
             return fbGet('/roster');
           }).then(function(retryRoster) {
+            // TEMPORARY DIAGNOSTIC — remove once resolved.
+            alert('RETRY DEBUG\n\n'
+              + 'First attempt: null (denied/empty)\n'
+              + 'Retry roster type: ' + (typeof retryRoster) + '\n'
+              + 'Retry roster value: ' + JSON.stringify(retryRoster) + '\n'
+              + 'Retry match: ' + checkRoster(retryRoster));
             grantOrDeny(checkRoster(retryRoster));
           });
         }
