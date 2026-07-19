@@ -155,7 +155,8 @@ function startFirebase(onAdmin, onCanvasser) {
       rosterCheckedFor = user.uid;
       if (typeof setFbBase === 'function') setFbBase();
       var targetEmail = email.trim().toLowerCase();
-      fbGet('/roster').then(function(roster) {
+
+      function checkRoster(roster) {
         var found = false;
         if (roster && typeof roster === 'object') {
           Object.values(roster).forEach(function(v) {
@@ -164,6 +165,10 @@ function startFirebase(onAdmin, onCanvasser) {
             if (rawEmail && rawEmail.trim().toLowerCase() === targetEmail) found = true;
           });
         }
+        return found;
+      }
+
+      function grantOrDeny(found) {
         if (!found) {
           auth.signOut();
           window.location.href = '/field-app/?denied=1&email='+encodeURIComponent(email);
@@ -171,6 +176,22 @@ function startFirebase(onAdmin, onCanvasser) {
         }
         if (typeof onCanvasser === 'function') onCanvasser(_currentUser);
         else if (!window.location.pathname.includes('/canvass')) window.location.href = '/field-app/canvass.html';
+      }
+
+      fbGet('/roster').then(function(roster) {
+        // A `null` roster on a request right after a fresh sign-in can mean
+        // the new token hasn't fully settled with the database backend yet
+        // (a real, if rare, Firebase timing quirk) rather than a genuinely
+        // empty roster. Give it one retry with a force-refreshed token
+        // before concluding access should be denied.
+        if (roster === null) {
+          return user.getIdToken(true).then(function(){
+            return fbGet('/roster');
+          }).then(function(retryRoster) {
+            grantOrDeny(checkRoster(retryRoster));
+          });
+        }
+        grantOrDeny(checkRoster(roster));
       }).catch(function() {
         if (typeof onCanvasser === 'function') onCanvasser(_currentUser);
       });
