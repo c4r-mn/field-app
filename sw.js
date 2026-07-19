@@ -1,5 +1,5 @@
 // Cassie for Roseville — Field App Service Worker
-var CACHE = 'c4r-v23';
+var CACHE = 'c4r-v24';
 
 // Only precache truly static assets — HTML is always network-first below,
 // so precaching it here just adds a fragile install-time dependency.
