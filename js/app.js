@@ -90,21 +90,30 @@ function initFirebase() {
 }
 
 // ── ROSTER ────────────────────────────────
+var ROSTER_CACHE_KEY = 'c4r_roster_cache_v1';
+
 function loadRoster() {
   return fbGet('/roster').then(function(d){
     if (d && typeof d==='object' && Object.keys(d).length > 0) {
       roster = d;
+      // Save a local "last known good" copy — self-maintaining fallback,
+      // always reflects whatever was most recently managed in the Roster
+      // admin page. No manual updates needed, ever.
+      try { localStorage.setItem(ROSTER_CACHE_KEY, JSON.stringify(d)); } catch (e) {}
     } else {
-      // First run — seed from INITIAL_ROSTER
-      roster = {};
-      var promises = INITIAL_ROSTER.map(function(v){
-        var id = genId();
-        roster[id] = {name:v.name, status:v.status, added:todayKey};
-        return fbPut('/roster/'+id, roster[id]);
-      });
-      return Promise.all(promises);
+      // Live fetch came back empty/null — before, this crashed trying to
+      // reference a non-existent INITIAL_ROSTER variable, which silently
+      // resulted in an empty roster with no warning. Now: fall back to the
+      // last successfully cached roster on this device, if we have one.
+      var cached = null;
+      try { cached = localStorage.getItem(ROSTER_CACHE_KEY); } catch (e) {}
+      roster = cached ? JSON.parse(cached) : {};
     }
-  }).catch(function(){ roster = {}; });
+  }).catch(function(){
+    var cached = null;
+    try { cached = localStorage.getItem(ROSTER_CACHE_KEY); } catch (e) {}
+    roster = cached ? JSON.parse(cached) : {};
+  });
 }
 
 function loadCanvassDays() {
