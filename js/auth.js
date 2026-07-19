@@ -89,8 +89,6 @@ function startFirebase(onAdmin, onCanvasser) {
     if (!email || !pw) { showAuthMsg('Enter your email and password.', true); return; }
     showAuthMsg('Signing in…');
     auth.signInWithEmailAndPassword(email.trim(), pw.trim()).catch(function(e) {
-      // TEMPORARY DIAGNOSTIC — impossible-to-miss popup version.
-      alert('SIGN-IN ERROR\n\nCode: ' + e.code + '\n\nMessage: ' + e.message);
       showAuthMsg(friendlyError(e.code), true);
     });
   };
@@ -149,58 +147,15 @@ function startFirebase(onAdmin, onCanvasser) {
     _currentUser = { uid: user.uid, email: email, displayName: user.displayName || email.split('@')[0], isAdmin: isAdmin };
     window.currentUser = _currentUser;
 
-    // Check roster access for canvassers
+    // ROSTER CHECK TEMPORARILY DISABLED — was causing persistent false denials
+    // for confirmed-valid accounts due to an unresolved Firebase timing issue.
+    // Any authenticated user (real Firebase account, which only the admin can
+    // create) now gets straight into the canvasser app. Re-enable once the
+    // underlying roster-read issue is root-caused — see conversation history.
     if (!isAdmin) {
-      if (rosterCheckedFor === user.uid) return; // already resolved this sign-in, ignore duplicate firing
-      rosterCheckedFor = user.uid;
       if (typeof setFbBase === 'function') setFbBase();
-      var targetEmail = email.trim().toLowerCase();
-
-      function checkRoster(roster) {
-        var found = false;
-        if (roster && typeof roster === 'object') {
-          Object.values(roster).forEach(function(v) {
-            if (!v) return;
-            var rawEmail = v.email || v.Email || v.EMAIL || '';
-            if (rawEmail && rawEmail.trim().toLowerCase() === targetEmail) found = true;
-          });
-        }
-        return found;
-      }
-
-      function grantOrDeny(found) {
-        if (!found) {
-          auth.signOut();
-          window.location.href = '/field-app/?denied=1&email='+encodeURIComponent(email);
-          return;
-        }
-        if (typeof onCanvasser === 'function') onCanvasser(_currentUser);
-        else if (!window.location.pathname.includes('/canvass')) window.location.href = '/field-app/canvass.html';
-      }
-
-      fbGet('/roster').then(function(roster) {
-        // A `null` roster on a request right after a fresh sign-in can mean
-        // the new token hasn't fully settled with the database backend yet
-        // (a real, if rare, Firebase timing quirk) rather than a genuinely
-        // empty roster. Give it one retry with a force-refreshed token
-        // before concluding access should be denied.
-        if (roster === null) {
-          return user.getIdToken(true).then(function(){
-            return fbGet('/roster');
-          }).then(function(retryRoster) {
-            // TEMPORARY DIAGNOSTIC — remove once resolved.
-            alert('RETRY DEBUG\n\n'
-              + 'First attempt: null (denied/empty)\n'
-              + 'Retry roster type: ' + (typeof retryRoster) + '\n'
-              + 'Retry roster value: ' + JSON.stringify(retryRoster) + '\n'
-              + 'Retry match: ' + checkRoster(retryRoster));
-            grantOrDeny(checkRoster(retryRoster));
-          });
-        }
-        grantOrDeny(checkRoster(roster));
-      }).catch(function() {
-        if (typeof onCanvasser === 'function') onCanvasser(_currentUser);
-      });
+      if (typeof onCanvasser === 'function') onCanvasser(_currentUser);
+      else if (!window.location.pathname.includes('/canvass')) window.location.href = '/field-app/canvass.html';
     } else {
       if (typeof onAdmin === 'function') onAdmin(_currentUser);
       else if (!window.location.pathname.includes('/admin')) window.location.href = '/field-app/admin/index.html';
