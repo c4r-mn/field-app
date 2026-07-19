@@ -111,6 +111,7 @@ function startFirebase(onAdmin, onCanvasser) {
   // once, and give one grace check before treating it as a real sign-out.
   var authSeenOnce = false;
   var pendingNullRedirect = null;
+  var rosterCheckedFor = null; // uid we've already completed a roster check for — prevents a duplicate/racy second check from overriding a correct first result
 
   auth.onAuthStateChanged(function(user) {
     updateUserBar(user);
@@ -150,45 +151,28 @@ function startFirebase(onAdmin, onCanvasser) {
 
     // Check roster access for canvassers
     if (!isAdmin) {
+      if (rosterCheckedFor === user.uid) return; // already resolved this sign-in, ignore duplicate firing
+      rosterCheckedFor = user.uid;
       if (typeof setFbBase === 'function') setFbBase();
       var targetEmail = email.trim().toLowerCase();
-      user.getIdToken(false).then(function(tok) {
-        var tokenInfo = tok ? ('YES, length '+tok.length) : 'NO TOKEN';
-        return fbGet('/roster').then(function(roster) {
-          var found = false;
-          var seenEmails = [];
-          if (roster && typeof roster === 'object') {
-            Object.values(roster).forEach(function(v) {
-              if (!v) return;
-              var rawEmail = v.email || v.Email || v.EMAIL || '';
-              if (rawEmail) seenEmails.push(rawEmail);
-              if (rawEmail && rawEmail.trim().toLowerCase() === targetEmail) found = true;
-            });
-          }
-          // TEMPORARY DIAGNOSTIC — one comprehensive popup, remove once resolved.
-          alert('ROSTER CHECK DEBUG\n\n'
-            + 'Signed in as: ' + email + '\n'
-            + 'Got ID token: ' + tokenInfo + '\n'
-            + 'Roster fetch: SUCCEEDED\n'
-            + 'Roster type: ' + (typeof roster) + '\n'
-            + 'Emails in roster (' + seenEmails.length + '): ' + JSON.stringify(seenEmails) + '\n'
-            + 'Match found: ' + found);
-          if (!found) {
-            auth.signOut();
-            window.location.href = '/field-app/?denied=1&email='+encodeURIComponent(email);
-            return;
-          }
-          if (typeof onCanvasser === 'function') onCanvasser(_currentUser);
-          else if (!window.location.pathname.includes('/canvass')) window.location.href = '/field-app/canvass.html';
-        }).catch(function(err) {
-          // TEMPORARY DIAGNOSTIC
-          alert('ROSTER CHECK DEBUG\n\n'
-            + 'Signed in as: ' + email + '\n'
-            + 'Got ID token: ' + tokenInfo + '\n'
-            + 'Roster fetch: FAILED\n'
-            + 'Error: ' + (err && err.message ? err.message : err));
-          if (typeof onCanvasser === 'function') onCanvasser(_currentUser);
-        });
+      fbGet('/roster').then(function(roster) {
+        var found = false;
+        if (roster && typeof roster === 'object') {
+          Object.values(roster).forEach(function(v) {
+            if (!v) return;
+            var rawEmail = v.email || v.Email || v.EMAIL || '';
+            if (rawEmail && rawEmail.trim().toLowerCase() === targetEmail) found = true;
+          });
+        }
+        if (!found) {
+          auth.signOut();
+          window.location.href = '/field-app/?denied=1&email='+encodeURIComponent(email);
+          return;
+        }
+        if (typeof onCanvasser === 'function') onCanvasser(_currentUser);
+        else if (!window.location.pathname.includes('/canvass')) window.location.href = '/field-app/canvass.html';
+      }).catch(function() {
+        if (typeof onCanvasser === 'function') onCanvasser(_currentUser);
       });
     } else {
       if (typeof onAdmin === 'function') onAdmin(_currentUser);
