@@ -31,16 +31,19 @@ var fbBase = '';
 // ── FIREBASE INIT ─────────────────────────────────────────────────────────
 function initFirebaseAdmin() {
   setFbBase();
-  fbGet('/.json?shallow=true')
-    .then(function(){
-      fbConnected = true;
-      loadRoster().then(function(){
-        loadCanvassDays().then(function(){
-          showAdminScreen();
-        });
-      });
-    })
-    .catch(function(){ showToast('Firebase offline — check connection'); showAdminScreen(); });
+  // Removed the broken root-level "/.json?shallow=true" connectivity
+  // check — it has no matching security rule (root has none, only
+  // specific child paths do), so it always failed regardless of real
+  // connectivity, and blocked the actual data loading nested inside it.
+  // loadRoster()/loadCanvassDays() below serve as the real connectivity
+  // check, on paths that do have working rules.
+  Promise.all([loadRoster(), loadCanvassDays()]).then(function(){
+    fbConnected = true;
+    showAdminScreen();
+  }).catch(function(){
+    showToast('Firebase offline — check connection');
+    showAdminScreen();
+  });
 }
 
 function initFirebaseCanvasser() {
@@ -71,22 +74,25 @@ function initFirebaseCanvasser() {
 
 
 function initFirebase() {
-  // Called from canvasser app to reconnect
-  fbGet('/.json?shallow=true')
-    .then(function(){
-      fbConnected=true;
-      var dot=document.getElementById('fb-dot'), lbl=document.getElementById('fb-lbl');
-      if(dot) dot.style.background='#27ae60';
-      if(lbl) lbl.textContent='Syncing live';
-      if(pollTimer) clearInterval(pollTimer);
-      pollTimer = setInterval(pullCanvasserData, 15000);
-      pullCanvasserData();
-    })
-    .catch(function(){
-      var dot=document.getElementById('fb-dot'), lbl=document.getElementById('fb-lbl');
-      if(dot) dot.style.background='#c0392b';
-      if(lbl) lbl.textContent='Offline — saving locally';
-    });
+  // Called from canvasser app to reconnect.
+  // Removed the broken root-level "/.json?shallow=true" connectivity
+  // check — it has no matching security rule so it always failed, which
+  // meant fbConnected never got set to true and pullCanvasserData()
+  // (the actual assignments/logs data) never ran. Using a real path
+  // with a working rule as the actual connectivity check instead.
+  fbGet('/canvass-days').then(function(){
+    fbConnected=true;
+    var dot=document.getElementById('fb-dot'), lbl=document.getElementById('fb-lbl');
+    if(dot) dot.style.background='#27ae60';
+    if(lbl) lbl.textContent='Syncing live';
+    if(pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(pullCanvasserData, 15000);
+    pullCanvasserData();
+  }).catch(function(){
+    var dot=document.getElementById('fb-dot'), lbl=document.getElementById('fb-lbl');
+    if(dot) dot.style.background='#c0392b';
+    if(lbl) lbl.textContent='Offline — saving locally';
+  });
 }
 
 // ── ROSTER ────────────────────────────────
@@ -120,9 +126,6 @@ function loadRoster() {
       roster = cached ? JSON.parse(cached) : {};
     });
   }
-  // Small initial delay — a token issued moments ago (fresh sign-in) may
-  // not have fully settled with the database backend on the very first
-  // read attempt. This is cheap insurance before we even try once.
   return new Promise(function(resolve){ setTimeout(resolve, 500); }).then(function(){
     return tryLoad(5);
   }).catch(function(){
@@ -1323,7 +1326,9 @@ function startApp() {
   if(!map) initMap(); else {refreshAllMarkers();fitBounds();}
   var dot=document.getElementById('fb-dot'),lbl=document.getElementById('fb-lbl');
   if(dot) dot.style.background='#d97706'; if(lbl) lbl.textContent='Connecting…';
-  fbGet('/.json?shallow=true').then(function(){
+  // Removed the broken root-level "/.json?shallow=true" connectivity
+  // check — no matching security rule, so it always failed here too.
+  fbGet('/canvass-days').then(function(){
     fbConnected=true;
     if(dot) dot.style.background='#27ae60'; if(lbl) lbl.textContent='Syncing live';
     if(pollTimer) clearInterval(pollTimer);
