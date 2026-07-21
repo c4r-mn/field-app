@@ -280,7 +280,9 @@ function loadShift() {
     var hood = (window.NEIGHBORHOODS||[]).find(function(n){return n.key===shiftData.neighborhood;});
     var hoodName = hood ? hood.displayName : (shiftData.neighborhood||'');
     document.getElementById('shift-title').textContent = formatDate(shiftDate)+' — '+hoodName;
-    isPastShift = shiftDate < new Date().toISOString().slice(0,10);
+    var _now = new Date();
+    var _todayLocal = _now.getFullYear()+'-'+String(_now.getMonth()+1).padStart(2,'0')+'-'+String(_now.getDate()).padStart(2,'0');
+    isPastShift = shiftDate < _todayLocal;
     document.getElementById('shift-sub').textContent = isPastShift ? 'Past shift' : 'Upcoming shift';
     document.getElementById('plan-mode-toggle').style.display = isPastShift ? 'none' : 'block';
     if (isPastShift) {
@@ -318,14 +320,6 @@ function loadShift() {
   });
 }
 
-function escapeHtml(s){
-  return String(s)
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;')
-    .replace(/'/g,'&#39;');
-}
 function volName(id){ return roster[id]?roster[id].name:id; }
 function activeVols(){
   return Object.entries(roster)
@@ -901,9 +895,27 @@ function toggleDanger() {
 function buildDangerZone() {
   document.getElementById('edit-notes').value = shiftData.notes || '';
   var dateGroup = document.getElementById('edit-date-group');
-  if (!isPastShift) {
+  // A shift dated in the past but with zero actual logged results never
+  // really happened (e.g. it was missed) — treat it like an upcoming
+  // shift and still allow rescheduling, rather than locking it as if
+  // it were a completed shift with real canvassing data.
+  var hasRealLogs = allLogs && Object.keys(allLogs).length > 0;
+  var canReschedule = !isPastShift || !hasRealLogs;
+  if (canReschedule) {
     dateGroup.style.display = 'block';
     document.getElementById('edit-date').value = shiftDate;
+    var hint = dateGroup.querySelector('.reschedule-hint');
+    if (isPastShift && !hasRealLogs) {
+      if (!hint) {
+        hint = document.createElement('div');
+        hint.className = 'reschedule-hint';
+        hint.style.cssText = 'font-size:11px;color:var(--gold-acc);margin-top:4px;font-weight:600;';
+        dateGroup.appendChild(hint);
+      }
+      hint.textContent = 'This shift date has passed with no logged results — treating it as missed, not completed.';
+    } else if (hint) {
+      hint.remove();
+    }
   } else {
     dateGroup.style.display = 'none';
   }
@@ -918,7 +930,9 @@ function saveShiftEdits() {
   var notes = document.getElementById('edit-notes').value.trim();
   var vols = Array.from(document.querySelectorAll('#edit-vol-grid .vol-check-item.checked')).map(function(el){return el.dataset.id;});
   var dateEl = document.getElementById('edit-date');
-  var newDate = (!isPastShift && dateEl) ? dateEl.value : shiftDate;
+  var _hasRealLogs = allLogs && Object.keys(allLogs).length > 0;
+  var _canReschedule = !isPastShift || !_hasRealLogs;
+  var newDate = (_canReschedule && dateEl) ? dateEl.value : shiftDate;
 
   if (newDate && newDate !== shiftDate) {
     rescheduleShift(newDate, notes, vols);
@@ -972,7 +986,7 @@ function rescheduleShift(newDate, notes, vols) {
     deletes.push(fbPut('/'+hood+'/buckets/'+oldDate, null));
     return Promise.all(deletes);
   }).then(function(){
-    window.location.href = 'shift.html?date=' + encodeURIComponent(newDate);
+    window.location.href = 'shift.html?date='+newDate;
   }).catch(function(err){
     if (err !== 'exists') showToast('Reschedule failed — please try again');
   });
@@ -1000,8 +1014,6 @@ function printWalkSheet() {
   var names=volName(currentCanvasserId);
   var partnerId = document.getElementById('assign-partner').value;
   if (partnerId && partnerId!==currentCanvasserId) names += ' & '+volName(partnerId);
-  var safeNames = escapeHtml(names);
-  var safeHoodName = escapeHtml(hoodName);
 
   // Build a QR code linking to live turn-by-turn directions in Google Maps
   var gmWaypoints = sorted.slice(0,23).map(function(a){return a.lat+','+a.lng;}).join('/');
@@ -1052,7 +1064,7 @@ function printWalkSheet() {
     +'<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">'
     +'<title>Walk Sheet</title><style>'+css+mapCss+'</style></head><body>'
     +'<div class="page">'
-    +'<div class="hdr"><div class="hdr-l"><div class="camp">Cassie for Roseville &mdash; Field App</div><div class="title">Walk Sheet: '+safeNames+'</div><div class="meta">'+safeHoodName+' &middot; '+formatDateLong(shiftDate)+'</div></div>'
+    +'<div class="hdr"><div class="hdr-l"><div class="camp">Cassie for Roseville &mdash; Field App</div><div class="title">Walk Sheet: '+names+'</div><div class="meta">'+hoodName+' &middot; '+formatDateLong(shiftDate)+'</div></div>'
     +'<div class="hdr-r"><div class="cnt">'+sorted.length+'</div><div class="lbl">Addresses</div></div></div>'
     +'<div id="walk-map"></div>'
     +'<div class="wm-cap">Route map &middot; numbers correspond to list below</div>'
