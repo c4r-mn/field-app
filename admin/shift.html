@@ -280,7 +280,9 @@ function loadShift() {
     var hood = (window.NEIGHBORHOODS||[]).find(function(n){return n.key===shiftData.neighborhood;});
     var hoodName = hood ? hood.displayName : (shiftData.neighborhood||'');
     document.getElementById('shift-title').textContent = formatDate(shiftDate)+' — '+hoodName;
-    isPastShift = shiftDate < new Date().toISOString().slice(0,10);
+    var _now = new Date();
+    var _todayLocal = _now.getFullYear()+'-'+String(_now.getMonth()+1).padStart(2,'0')+'-'+String(_now.getDate()).padStart(2,'0');
+    isPastShift = shiftDate < _todayLocal;
     document.getElementById('shift-sub').textContent = isPastShift ? 'Past shift' : 'Upcoming shift';
     document.getElementById('plan-mode-toggle').style.display = isPastShift ? 'none' : 'block';
     if (isPastShift) {
@@ -318,15 +320,20 @@ function loadShift() {
   });
 }
 
-function escapeHtml(s){
-  return String(s)
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;')
-    .replace(/'/g,'&#39;');
-}
 function volName(id){ return roster[id]?roster[id].name:id; }
+
+// Escapes text before it's inserted into an innerHTML string, so a name,
+// note, or label containing HTML-special characters (< > & " ') can't be
+// misinterpreted as markup. Fixes CodeQL "DOM text reinterpreted as HTML".
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 function activeVols(){
   return Object.entries(roster)
     .filter(function(e){return e[1].status==='active';})
@@ -350,8 +357,8 @@ function buildCanvasserSelect() {
   if (!vols.length) vols = activeVols().map(function(v){return v.id;});
 
   vols.forEach(function(id){
-    sel.innerHTML += '<option value="'+id+'">'+volName(id)+'</option>';
-    ptSel.innerHTML += '<option value="'+id+'">'+volName(id)+'</option>';
+    sel.innerHTML += '<option value="'+id+'">'+escapeHtml(volName(id))+'</option>';
+    ptSel.innerHTML += '<option value="'+id+'">'+escapeHtml(volName(id))+'</option>';
   });
 
   if (vols.length) {
@@ -505,7 +512,7 @@ function populateBucketCanvasserSelect() {
   if (!sel) return;
   var vols = (shiftData.volunteers||[]).length ? shiftData.volunteers : activeVols().map(function(v){return v.id;});
   sel.innerHTML = '<option value="">— Select canvasser —</option>';
-  vols.forEach(function(id){ sel.innerHTML += '<option value="'+id+'">'+volName(id)+'</option>'; });
+  vols.forEach(function(id){ sel.innerHTML += '<option value="'+id+'">'+escapeHtml(volName(id))+'</option>'; });
 }
 
 function renderBucketList() {
@@ -521,7 +528,7 @@ function renderBucketList() {
     var active = id === currentBucketId;
     return '<div class="bucket-chip" data-bid="'+id+'" onclick="editBucket(this.dataset.bid)" style="padding:8px 14px;border-radius:8px;cursor:pointer;'
       +'border:2px solid '+(active?'var(--gold)':'var(--border)')+';background:'+(active?'#fdf6e0':'var(--white)')+';">'
-      +'<div style="font-size:12px;font-weight:700;">'+(b.label||'Untitled Bucket')+'</div>'
+      +'<div style="font-size:12px;font-weight:700;">'+escapeHtml(b.label||'Untitled Bucket')+'</div>'
       +'<div style="font-size:10px;color:var(--subtle);">'+count+' addresses</div>'
       +'</div>';
   }).join('');
@@ -594,7 +601,7 @@ function renderBucketAssignChecklist() {
     var b = buckets[id];
     var count = (b.route||[]).length;
     return '<label style="display:flex;align-items:center;gap:6px;padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">'
-      +'<input type="checkbox" class="bucket-assign-cb" value="'+id+'"> '+(b.label||'Untitled')+' <span style="color:var(--subtle);font-weight:400;">('+count+')</span>'
+      +'<input type="checkbox" class="bucket-assign-cb" value="'+id+'"> '+escapeHtml(b.label||'Untitled')+' <span style="color:var(--subtle);font-weight:400;">('+count+')</span>'
       +'</label>';
   }).join('');
 }
@@ -792,7 +799,7 @@ function renderAddrList() {
       var visited = !!everVisited[addr.id];
       return '<div class="ck-unsel-row" data-aid="'+addr.id+'" onclick="_ckToggle(this)" style="'+(visited?'opacity:.5;':'')+'">'
         +'<div style="width:8px;height:8px;border-radius:50%;border:1.5px solid '+(visited?'#b8b4a8':'#ccc')+';flex-shrink:0;"></div>'
-        +'<div style="flex:1;min-width:0;font-size:12px;font-weight:600;">'+addr.n+' '+addr.s+(addr.u?' &middot; '+addr.u:'')+'<div style="font-size:10px;color:var(--subtle);font-weight:400;">'+meta.label+(visited?' &middot; already visited':'')+'</div></div>'
+        +'<div style="flex:1;min-width:0;font-size:12px;font-weight:600;">'+escapeHtml(addr.n)+' '+escapeHtml(addr.s)+(addr.u?' &middot; '+escapeHtml(addr.u):'')+'<div style="font-size:10px;color:var(--subtle);font-weight:400;">'+meta.label+(visited?' &middot; already visited':'')+'</div></div>'
         +'</div>';
     }).join('');
     listEl.innerHTML = routeHtml+divider+unselHtml;
@@ -827,14 +834,14 @@ function renderAddrList() {
     return '<div class="addr-log-row" data-addr-id="'+addrId+'">'
       +'<div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:6px;">'
         +'<div class="addr-log-num">'+(i+1)+'.</div>'
-        +'<div class="addr-log-addr">'+addr.n+' '+addr.s+(addr.u?' &middot; '+addr.u:'')+'</div>'
-        +(log?'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;background:'+resultColor+'22;color:'+resultColor+';">'+log.contact+'</span>':'<span class="not-knocked">Not knocked</span>')
+        +'<div class="addr-log-addr">'+escapeHtml(addr.n)+' '+escapeHtml(addr.s)+(addr.u?' &middot; '+escapeHtml(addr.u):'')+'</div>'
+        +(log?'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;background:'+resultColor+'22;color:'+resultColor+';">'+escapeHtml(log.contact)+'</span>':'<span class="not-knocked">Not knocked</span>')
       +'</div>'
       +'<div style="display:flex;flex-wrap:wrap;gap:6px;width:100%;padding-left:24px;">'
         +'<select class="form-input log-contact" data-addr-id="'+addrId+'" style="font-size:11px;padding:4px 8px;width:auto;flex-shrink:0;"><option value="">— Result —</option>'+contactOpts+'</select>'
-        +'<input class="form-input log-name" data-addr-id="'+addrId+'" type="text" placeholder="First name" value="'+(log&&log.name?log.name:'')+'" style="font-size:11px;padding:4px 8px;width:110px;flex-shrink:0;">'
-        +'<input class="form-input log-phone" data-addr-id="'+addrId+'" type="tel" placeholder="Phone" value="'+(log&&log.phone?log.phone:'')+'" style="font-size:11px;padding:4px 8px;width:110px;flex-shrink:0;">'
-        +'<input class="form-input log-notes" data-addr-id="'+addrId+'" type="text" placeholder="Notes" value="'+(log&&log.notes?log.notes:'')+'" style="font-size:11px;padding:4px 8px;flex:1;min-width:120px;">'
+        +'<input class="form-input log-name" data-addr-id="'+addrId+'" type="text" placeholder="First name" value="'+escapeHtml(log&&log.name?log.name:'')+'" style="font-size:11px;padding:4px 8px;width:110px;flex-shrink:0;">'
+        +'<input class="form-input log-phone" data-addr-id="'+addrId+'" type="tel" placeholder="Phone" value="'+escapeHtml(log&&log.phone?log.phone:'')+'" style="font-size:11px;padding:4px 8px;width:110px;flex-shrink:0;">'
+        +'<input class="form-input log-notes" data-addr-id="'+addrId+'" type="text" placeholder="Notes" value="'+escapeHtml(log&&log.notes?log.notes:'')+'" style="font-size:11px;padding:4px 8px;flex:1;min-width:120px;">'
         +'<label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;"><input type="checkbox" class="log-lit" data-addr-id="'+addrId+'"'+(log&&(log.litLeft||log.cardLeft)?' checked':'')+'>Lit Left</label>'
         +'<label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;"><input type="checkbox" class="log-sign" data-addr-id="'+addrId+'"'+(log&&log.wantSign?' checked':'')+'>🪧 Sign</label>'
         +'<label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;"><input type="checkbox" class="log-contact-flag" data-addr-id="'+addrId+'"'+(log&&log.wantContact?' checked':'')+'>📞 Contact</label>'
@@ -901,9 +908,27 @@ function toggleDanger() {
 function buildDangerZone() {
   document.getElementById('edit-notes').value = shiftData.notes || '';
   var dateGroup = document.getElementById('edit-date-group');
-  if (!isPastShift) {
+  // A shift dated in the past but with zero actual logged results never
+  // really happened (e.g. it was missed) — treat it like an upcoming
+  // shift and still allow rescheduling, rather than locking it as if
+  // it were a completed shift with real canvassing data.
+  var hasRealLogs = allLogs && Object.keys(allLogs).length > 0;
+  var canReschedule = !isPastShift || !hasRealLogs;
+  if (canReschedule) {
     dateGroup.style.display = 'block';
     document.getElementById('edit-date').value = shiftDate;
+    var hint = dateGroup.querySelector('.reschedule-hint');
+    if (isPastShift && !hasRealLogs) {
+      if (!hint) {
+        hint = document.createElement('div');
+        hint.className = 'reschedule-hint';
+        hint.style.cssText = 'font-size:11px;color:var(--gold-acc);margin-top:4px;font-weight:600;';
+        dateGroup.appendChild(hint);
+      }
+      hint.textContent = 'This shift date has passed with no logged results — treating it as missed, not completed.';
+    } else if (hint) {
+      hint.remove();
+    }
   } else {
     dateGroup.style.display = 'none';
   }
@@ -911,14 +936,22 @@ function buildDangerZone() {
   grid.innerHTML = activeVols().map(function(v){
     var checked = (shiftData.volunteers||[]).indexOf(v.id)!==-1;
     return '<div class="vol-check-item'+(checked?' checked':'')+'" data-id="'+v.id+'" onclick="this.classList.toggle(\'checked\')">'
-      +'<div class="vci-box">&#x2713;</div><div class="vci-name">'+v.name+'</div></div>';
+      +'<div class="vci-box">&#x2713;</div><div class="vci-name">'+escapeHtml(v.name)+'</div></div>';
   }).join('');
 }
 function saveShiftEdits() {
   var notes = document.getElementById('edit-notes').value.trim();
   var vols = Array.from(document.querySelectorAll('#edit-vol-grid .vol-check-item.checked')).map(function(el){return el.dataset.id;});
   var dateEl = document.getElementById('edit-date');
-  var newDate = (!isPastShift && dateEl) ? dateEl.value : shiftDate;
+  var _hasRealLogs = allLogs && Object.keys(allLogs).length > 0;
+  var _canReschedule = !isPastShift || !_hasRealLogs;
+  var rawNewDate = (_canReschedule && dateEl) ? dateEl.value : shiftDate;
+
+  // Explicitly validate the date is a plain YYYY-MM-DD string before it
+  // flows anywhere else (Firebase paths, URLs, dialogs). The <input
+  // type="date"> field is browser-constrained to this format already,
+  // but this makes it provably safe rather than just practically safe.
+  var newDate = /^\d{4}-\d{2}-\d{2}$/.test(rawNewDate) ? rawNewDate : shiftDate;
 
   if (newDate && newDate !== shiftDate) {
     rescheduleShift(newDate, notes, vols);
@@ -972,7 +1005,7 @@ function rescheduleShift(newDate, notes, vols) {
     deletes.push(fbPut('/'+hood+'/buckets/'+oldDate, null));
     return Promise.all(deletes);
   }).then(function(){
-    window.location.href = 'shift.html?date=' + encodeURIComponent(newDate);
+    window.location.href = 'shift.html?date='+newDate;
   }).catch(function(err){
     if (err !== 'exists') showToast('Reschedule failed — please try again');
   });
@@ -1000,8 +1033,6 @@ function printWalkSheet() {
   var names=volName(currentCanvasserId);
   var partnerId = document.getElementById('assign-partner').value;
   if (partnerId && partnerId!==currentCanvasserId) names += ' & '+volName(partnerId);
-  var safeNames = escapeHtml(names);
-  var safeHoodName = escapeHtml(hoodName);
 
   // Build a QR code linking to live turn-by-turn directions in Google Maps
   var gmWaypoints = sorted.slice(0,23).map(function(a){return a.lat+','+a.lng;}).join('/');
@@ -1052,7 +1083,7 @@ function printWalkSheet() {
     +'<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">'
     +'<title>Walk Sheet</title><style>'+css+mapCss+'</style></head><body>'
     +'<div class="page">'
-    +'<div class="hdr"><div class="hdr-l"><div class="camp">Cassie for Roseville &mdash; Field App</div><div class="title">Walk Sheet: '+safeNames+'</div><div class="meta">'+safeHoodName+' &middot; '+formatDateLong(shiftDate)+'</div></div>'
+    +'<div class="hdr"><div class="hdr-l"><div class="camp">Cassie for Roseville &mdash; Field App</div><div class="title">Walk Sheet: '+names+'</div><div class="meta">'+hoodName+' &middot; '+formatDateLong(shiftDate)+'</div></div>'
     +'<div class="hdr-r"><div class="cnt">'+sorted.length+'</div><div class="lbl">Addresses</div></div></div>'
     +'<div id="walk-map"></div>'
     +'<div class="wm-cap">Route map &middot; numbers correspond to list below</div>'
