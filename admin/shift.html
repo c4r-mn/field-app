@@ -945,7 +945,13 @@ function saveShiftEdits() {
   var dateEl = document.getElementById('edit-date');
   var _hasRealLogs = allLogs && Object.keys(allLogs).length > 0;
   var _canReschedule = !isPastShift || !_hasRealLogs;
-  var newDate = (_canReschedule && dateEl) ? dateEl.value : shiftDate;
+  var rawNewDate = (_canReschedule && dateEl) ? dateEl.value : shiftDate;
+
+  // Explicitly validate the date is a plain YYYY-MM-DD string before it
+  // flows anywhere else (Firebase paths, URLs, dialogs). The <input
+  // type="date"> field is browser-constrained to this format already,
+  // but this makes it provably safe rather than just practically safe.
+  var newDate = /^\d{4}-\d{2}-\d{2}$/.test(rawNewDate) ? rawNewDate : shiftDate;
 
   if (newDate && newDate !== shiftDate) {
     rescheduleShift(newDate, notes, vols);
