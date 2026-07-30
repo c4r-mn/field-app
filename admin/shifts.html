@@ -55,6 +55,9 @@
         <div class="form-col">
           <label class="form-label">Date</label>
           <input class="form-input" id="new-date" type="date">
+          <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12px;font-weight:600;cursor:pointer;color:var(--muted);">
+            <input type="checkbox" id="new-anytime" onchange="toggleAnytimeDate()"> No specific date
+          </label>
         </div>
         <div class="form-col">
           <label class="form-label">Neighborhood</label>
@@ -102,7 +105,7 @@
 <script>
 var roster = {};
 var canvassDays = {};
-var today = new Date().toISOString().slice(0,10);
+var today = (function(){var _d=new Date();return _d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');})();
 
 initAuth(
   function(user) { loadShifts(); },
@@ -158,22 +161,35 @@ function toggleNewForm() {
     // Set default date to today
     document.getElementById('new-date').value = today;
     document.getElementById('new-notes').value = '';
+    document.getElementById('new-anytime').checked = false;
+    document.getElementById('new-date').disabled = false;
     document.querySelectorAll('#new-vol-grid .vol-check-item').forEach(function(el){ el.classList.remove('checked'); });
   }
 }
 
+function toggleAnytimeDate() {
+  var isAnytime = document.getElementById('new-anytime').checked;
+  var dateEl = document.getElementById('new-date');
+  dateEl.disabled = isAnytime;
+  if (isAnytime) dateEl.value = '';
+}
+
 function saveNewShift() {
-  var date = document.getElementById('new-date').value;
+  var isAnytime = document.getElementById('new-anytime').checked;
+  // Each Anytime shift gets its own unique key (anytime-<timestamp>) rather
+  // than one fixed "anytime" key, so multiple flexible shifts can coexist
+  // — different volunteers, different neighborhoods, whatever's needed.
+  var date = isAnytime ? ('anytime-' + Date.now()) : document.getElementById('new-date').value;
   var hood = document.getElementById('new-hood').value;
   var notes = document.getElementById('new-notes').value.trim();
-  if (!date) { showToast('Pick a date'); return; }
+  if (!isAnytime && !date) { showToast('Pick a date, or check "No specific date"'); return; }
   if (!hood) { showToast('Pick a neighborhood'); return; }
   var vols = Array.from(document.querySelectorAll('#new-vol-grid .vol-check-item.checked')).map(function(el){ return el.dataset.id; });
   var shiftObj = { neighborhood:hood, notes:notes, volunteers:vols, created:new Date().toISOString() };
   fbPut('/canvass-days/'+date, shiftObj).then(function() {
     showToast('Shift created — opening route planner...');
     setTimeout(function(){
-      window.location.href = '/field-app/admin/shift.html?date=' + encodeURIComponent(date);
+      window.location.href = '/field-app/admin/shift.html?date='+date;
     }, 500);
   }).catch(function(){ showToast('Save failed'); });
 }
@@ -185,12 +201,15 @@ function renderShifts() {
 
   function card(pair) {
     var date=pair[0], day=pair[1];
+    var isAnytime = date.indexOf('anytime') === 0;
     var hood = (window.NEIGHBORHOODS||[]).find(function(n){return n.key===day.neighborhood;});
     var hoodName = hood ? hood.displayName : (day.neighborhood||'');
     var vols = (day.volunteers||[]).map(volName);
-    var d = new Date(date+'T12:00:00');
+    var badgeHtml = isAnytime
+      ? '<div class="shift-date-badge" style="background:var(--gold);"><div class="day" style="font-size:9px;line-height:1.1;">ANY</div><div class="month">TIME</div></div>'
+      : (function(){ var d = new Date(date+'T12:00:00'); return '<div class="shift-date-badge"><div class="day">'+d.getDate()+'</div><div class="month">'+d.toLocaleDateString('en-US',{month:'short'})+'</div></div>'; })();
     return '<div class="shift-item">' +
-      '<div class="shift-date-badge"><div class="day">'+d.getDate()+'</div><div class="month">'+d.toLocaleDateString('en-US',{month:'short'})+'</div></div>' +
+      badgeHtml +
       '<div class="shift-info">' +
         '<div class="shift-hood">'+hoodName+(day.notes?' · '+day.notes:'')+'</div>' +
         '<div class="shift-meta">'+formatDate(date)+'</div>' +
