@@ -259,7 +259,7 @@ var PROP_META = {
 };
 var RESULT_COLORS = {
   'Not Home':'#64748b','Vacant':'#94a3b8','For Sale':'#7c3aed',
-  'No Soliciting':'#92400e','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb'
+  'No Soliciting':'#92400e','No Access':'#78716c','Dog Present':'#ea580c','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb'
 };
 
 initAuth(
@@ -638,13 +638,17 @@ function renderStats() {
   var contact = logs.filter(function(l){return l.wantContact;}).length;
   var signs = logs.filter(function(l){return l.wantSign;}).length;
   var nosolic = logs.filter(function(l){return l.contact==='No Soliciting';}).length;
+  var noaccess = logs.filter(function(l){return l.contact==='No Access';}).length;
+  var dogpresent = logs.filter(function(l){return l.contact==='Dog Present';}).length;
   document.getElementById('cv-stats').innerHTML =
     statCard(logs.length,'Doors Knocked')+
     statCard(adminRoute.length,'Assigned')+
     statCard(accepted,'Accepted','#27ae60')+
     statCard(contact,'Cassie to Contact','#D4A832')+
     statCard(signs,'Yard Signs','#D4A832')+
-    statCard(nosolic,'No Soliciting','#c0392b');
+    statCard(nosolic,'No Soliciting','#c0392b')+
+    statCard(noaccess,'No Access','#78716c')+
+    statCard(dogpresent,'Dog Present','#ea580c');
 }
 function statCard(n,label,color){
   return '<div class="stat-card"><div class="stat-n"'+(color?' style="color:'+color+';"':'')+'>'+n+'</div><div class="stat-l">'+label+'</div></div>';
@@ -811,7 +815,7 @@ function renderAddrList() {
     listEl.innerHTML = '<div style="padding:16px;color:var(--subtle);font-size:13px;">No addresses assigned.</div>';
     return;
   }
-  var CONTACTS = ['Not Home','Vacant','For Sale','No Soliciting','Refused','Accepted','Other Language'];
+  var CONTACTS = ['Not Home','Vacant','For Sale','No Soliciting','No Access','Dog Present','Refused','Accepted','Other Language'];
   var volLogs = allLogs[currentCanvasserId]||{};
 
   var expandedRoute = [];
@@ -916,7 +920,7 @@ function buildDangerZone() {
   var canReschedule = !isPastShift || !hasRealLogs;
   if (canReschedule) {
     dateGroup.style.display = 'block';
-    document.getElementById('edit-date').value = shiftDate;
+    document.getElementById('edit-date').value = (shiftDate.indexOf('anytime') === 0) ? '' : shiftDate;
     var hint = dateGroup.querySelector('.reschedule-hint');
     if (isPastShift && !hasRealLogs) {
       if (!hint) {
@@ -968,7 +972,7 @@ function saveShiftEdits() {
 
 function rescheduleShift(newDate, notes, vols) {
   if (!confirm('Move this shift from '+formatDate(shiftDate)+' to '+formatDate(newDate)+'? This moves all planned routes and buckets to the new date.')) {
-    document.getElementById('edit-date').value = shiftDate;
+    document.getElementById('edit-date').value = (shiftDate.indexOf('anytime') === 0) ? '' : shiftDate;
     return;
   }
   var hood = shiftData.neighborhood;
