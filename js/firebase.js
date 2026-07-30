@@ -14,6 +14,9 @@ function fbFetch(path, opts) {
   // missing entirely, which worked only because old test-mode rules didn't
   // check auth status at all. Real rules require this.
   var user = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
+  // TEMPORARY DIAGNOSTIC — logs to console (not alert) on every call, so
+  // it's visible in the same DevTools tab without more screenshots needed.
+  console.log('[fbFetch]', path, '| currentUser:', user ? user.email : 'NULL', '| firebase.auth() exists:', typeof firebase !== 'undefined' && !!firebase.auth);
   var tokenPromise = user ? user.getIdToken(false) : Promise.resolve(null);
 
   // Safety timeout — if getIdToken() ever stalls (seen intermittently on
