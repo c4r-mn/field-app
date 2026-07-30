@@ -206,6 +206,11 @@
             <div style="font-size:11px;color:var(--muted);margin-top:4px;">Changing this moves all assignments and buckets planned for this shift to the new date.</div>
           </div>
           <div class="form-group">
+            <label class="form-label">Neighborhood(s)</label>
+            <div id="edit-hood-grid" style="display:flex;flex-wrap:wrap;gap:6px;max-height:120px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px;"></div>
+            <div style="font-size:11px;color:var(--muted);margin-top:4px;">Check more than one to combine neighborhoods into a single route. Changing this does not move already-saved routes between neighborhoods.</div>
+          </div>
+          <div class="form-group">
             <label class="form-label">Shift Notes</label>
             <input class="form-input" id="edit-notes" type="text" placeholder="Shift notes...">
           </div>
@@ -238,6 +243,7 @@ var roster = {}, shiftData = null, allAssignments = {}, allLogs = {};
 var shiftMap = null, mapMarkers = {};
 var currentCanvasserId = '';
 var adminAddresses = [], adminSelected = {}, adminRoute = [];
+var shiftHoods = [];
 var everVisited = {};
 var planMode = 'direct'; // 'direct' | 'bucket'
 var buckets = {};
@@ -277,8 +283,15 @@ function loadShift() {
       return;
     }
 
-    var hood = (window.NEIGHBORHOODS||[]).find(function(n){return n.key===shiftData.neighborhood;});
-    var hoodName = hood ? hood.displayName : (shiftData.neighborhood||'');
+    // shiftData.neighborhoods (plural) is the real field — falls back to
+    // the older singular .neighborhood for shifts created before this
+    // multi-neighborhood support existed.
+    shiftHoods = shiftData.neighborhoods || (shiftData.neighborhood ? [shiftData.neighborhood] : []);
+    var hoodNames = shiftHoods.map(function(key){
+      var hood = (window.NEIGHBORHOODS||[]).find(function(n){return n.key===key;});
+      return hood ? hood.displayName : key;
+    });
+    var hoodName = hoodNames.join(' + ');
     document.getElementById('shift-title').textContent = formatDate(shiftDate)+' — '+hoodName;
     var _now = new Date();
     var _todayLocal = _now.getFullYear()+'-'+String(_now.getMonth()+1).padStart(2,'0')+'-'+String(_now.getDate()).padStart(2,'0');
@@ -289,28 +302,80 @@ function loadShift() {
       document.getElementById('bucket-panel').style.display = 'none';
       document.getElementById('direct-panel').style.display = 'block';
     }
-    adminAddresses = (window.NEIGHBORHOOD_DATA&&window.NEIGHBORHOOD_DATA[shiftData.neighborhood])||[];
+    // Build the address pool as the UNION of every selected neighborhood,
+    // tagging each address with which neighborhood it actually came from
+    // — that tag is what lets route/log/bucket saves get split and written
+    // to the correct per-neighborhood Firebase path later.
+    adminAddresses = [];
+    shiftHoods.forEach(function(hoodKey){
+      var addrs = (window.NEIGHBORHOOD_DATA && window.NEIGHBORHOOD_DATA[hoodKey]) || [];
+      addrs.forEach(function(a){
+        var tagged = Object.assign({}, a, {_hoodKey: hoodKey});
+        adminAddresses.push(tagged);
+      });
+    });
     populateMeetGreetBuildings();
 
-    Promise.all([
-      fbGet('/'+shiftData.neighborhood+'/assignments/'+shiftDate),
-      fbGet('/'+shiftData.neighborhood+'/logs/'+shiftDate),
-      fbGet('/'+shiftData.neighborhood+'/logs'),
-      fbGet('/'+shiftData.neighborhood+'/buckets/'+shiftDate),
-    ]).then(function(r2) {
-      allAssignments = r2[0] || {};
-      allLogs = r2[1] || {};
-      buckets = r2[3] || {};
-      // Build set of addresses ever visited (any date, any canvasser) for this neighborhood
+    // Fetch assignments/logs/buckets from EVERY selected neighborhood and
+    // merge them — a single canvasser's route can now genuinely span
+    // multiple neighborhoods, so a naive "last one wins" overwrite would
+    // silently drop part of their route. Merge properly instead.
+    var hoodFetches = shiftHoods.map(function(hoodKey){
+      return Promise.all([
+        fbGet('/'+hoodKey+'/assignments/'+shiftDate),
+        fbGet('/'+hoodKey+'/logs/'+shiftDate),
+        fbGet('/'+hoodKey+'/logs'),
+        fbGet('/'+hoodKey+'/buckets/'+shiftDate),
+      ]);
+    });
+
+    Promise.all(hoodFetches).then(function(allResults) {
+      allAssignments = {};
+      allLogs = {};
+      buckets = {};
       everVisited = {};
-      var allDatesLogs = r2[2] || {};
-      Object.values(allDatesLogs).forEach(function(dayLogs){
-        if (!dayLogs) return;
-        Object.values(dayLogs).forEach(function(volLogs){
-          if (!volLogs) return;
-          Object.keys(volLogs).forEach(function(addrId){ everVisited[addrId] = true; });
+
+      allResults.forEach(function(r2){
+        var hoodAssignments = r2[0] || {};
+        Object.keys(hoodAssignments).forEach(function(volId){
+          var incoming = hoodAssignments[volId] || {};
+          if (!allAssignments[volId]) allAssignments[volId] = {route:[], assignments:{}};
+          var existingRoute = allAssignments[volId].route || [];
+          var incomingRoute = incoming.route || [];
+          var seen = {}; existingRoute.forEach(function(id){seen[id]=true;});
+          incomingRoute.forEach(function(id){ if(!seen[id]){seen[id]=true; existingRoute.push(id);} });
+          allAssignments[volId].route = existingRoute;
+          allAssignments[volId].assignments = Object.assign({}, allAssignments[volId].assignments, incoming.assignments||{});
+        });
+
+        var hoodLogs = r2[1] || {};
+        Object.keys(hoodLogs).forEach(function(volId){
+          if (!allLogs[volId]) allLogs[volId] = {};
+          Object.assign(allLogs[volId], hoodLogs[volId]||{});
+        });
+
+        var hoodBuckets = r2[3] || {};
+        Object.keys(hoodBuckets).forEach(function(bucketId){
+          var incoming = hoodBuckets[bucketId] || {};
+          if (!buckets[bucketId]) buckets[bucketId] = {label:incoming.label, route:[], assignments:{}};
+          var existingRoute = buckets[bucketId].route || [];
+          var incomingRoute = incoming.route || [];
+          var seen = {}; existingRoute.forEach(function(id){seen[id]=true;});
+          incomingRoute.forEach(function(id){ if(!seen[id]){seen[id]=true; existingRoute.push(id);} });
+          buckets[bucketId].route = existingRoute;
+          buckets[bucketId].assignments = Object.assign({}, buckets[bucketId].assignments, incoming.assignments||{});
+        });
+
+        var allDatesLogs = r2[2] || {};
+        Object.values(allDatesLogs).forEach(function(dayLogs){
+          if (!dayLogs) return;
+          Object.values(dayLogs).forEach(function(volLogs){
+            if (!volLogs) return;
+            Object.keys(volLogs).forEach(function(addrId){ everVisited[addrId] = true; });
+          });
         });
       });
+
       buildCanvasserSelect();
       buildDangerZone();
     });
@@ -423,7 +488,7 @@ function logMeetGreet() {
       time: nowIso,
       isEvent: true,
     };
-    return fbPut('/'+shiftData.neighborhood+'/logs/'+shiftDate+'/'+currentCanvasserId+'/'+u.id, logEntry);
+    return fbPut('/'+u._hoodKey+'/logs/'+shiftDate+'/'+currentCanvasserId+'/'+u.id, logEntry);
   });
 
   Promise.all(writes).then(function(){
@@ -566,7 +631,12 @@ function saveBucket() {
   if (!currentBucketId) return;
   var label = document.getElementById('bucket-label-input').value.trim() || 'Untitled Bucket';
   buckets[currentBucketId] = { label: label, route: adminRoute.slice(), assignments: Object.assign({}, adminSelected) };
-  fbPut('/'+shiftData.neighborhood+'/buckets/'+shiftDate+'/'+currentBucketId, buckets[currentBucketId]).then(function(){
+  var byHood = splitRouteByNeighborhood(adminRoute, adminSelected);
+  var saves = Object.keys(byHood).map(function(hoodKey){
+    var payload = Object.assign({label: label}, byHood[hoodKey]);
+    return fbPut('/'+hoodKey+'/buckets/'+shiftDate+'/'+currentBucketId, payload);
+  });
+  Promise.all(saves).then(function(){
     showToast('Bucket saved: '+label);
     renderBucketList();
     renderBucketAssignChecklist();
@@ -577,7 +647,10 @@ function deleteBucket() {
   if (!currentBucketId) return;
   var label = (buckets[currentBucketId]||{}).label || 'this bucket';
   if (!confirm('Delete '+label+'? This does not affect any canvasser already assigned from it.')) return;
-  fbPut('/'+shiftData.neighborhood+'/buckets/'+shiftDate+'/'+currentBucketId, null).then(function(){
+  var deletes = shiftHoods.map(function(hoodKey){
+    return fbPut('/'+hoodKey+'/buckets/'+shiftDate+'/'+currentBucketId, null);
+  });
+  Promise.all(deletes).then(function(){
     delete buckets[currentBucketId];
     currentBucketId = null;
     adminRoute = []; adminSelected = {};
@@ -624,9 +697,12 @@ function assignBucketsToCanvasser() {
     Object.assign(mergedSelected, b.assignments||{});
   });
 
-  var payload = { route: mergedRoute, assignments: mergedSelected };
-  fbPut('/'+shiftData.neighborhood+'/assignments/'+shiftDate+'/'+volId, payload).then(function(){
-    allAssignments[volId] = payload;
+  var byHood = splitRouteByNeighborhood(mergedRoute, mergedSelected);
+  var saves = Object.keys(byHood).map(function(hoodKey){
+    return fbPut('/'+hoodKey+'/assignments/'+shiftDate+'/'+volId, byHood[hoodKey]);
+  });
+  Promise.all(saves).then(function(){
+    allAssignments[volId] = { route: mergedRoute, assignments: mergedSelected };
     showToast('Assigned '+mergedRoute.length+' addresses to '+volName(volId));
   }).catch(function(){ showToast('Assign failed'); });
 }
@@ -879,7 +955,9 @@ function saveAddrLog(addrId) {
     time: existing.time || new Date().toISOString(),
   });
 
-  var path = '/'+shiftData.neighborhood+'/logs/'+shiftDate+'/'+currentCanvasserId+'/'+addrId;
+  var _addr = adminAddresses.find(function(a){return a.id===addrId;});
+  var _hoodKey = _addr ? _addr._hoodKey : shiftHoods[0];
+  var path = '/'+_hoodKey+'/logs/'+shiftDate+'/'+currentCanvasserId+'/'+addrId;
   fbPut(path, entry).then(function(){
     if (!allLogs[currentCanvasserId]) allLogs[currentCanvasserId]={};
     allLogs[currentCanvasserId][addrId]=entry;
@@ -888,17 +966,39 @@ function saveAddrLog(addrId) {
   }).catch(function(){ showToast('Save failed'); });
 }
 
+function splitRouteByNeighborhood(route, selected) {
+  // A route can now span multiple neighborhoods — group addresses by
+  // which one they actually belong to, so each gets written to its own
+  // correct Firebase path.
+  var addrMap = {};
+  adminAddresses.forEach(function(a){ addrMap[a.id] = a; });
+  var byHood = {};
+  route.forEach(function(addrId){
+    var addr = addrMap[addrId];
+    var hoodKey = addr ? addr._hoodKey : null;
+    if (!hoodKey) return; // address not found in any selected neighborhood — skip defensively
+    if (!byHood[hoodKey]) byHood[hoodKey] = {route:[], assignments:{}};
+    byHood[hoodKey].route.push(addrId);
+    if (selected && selected[addrId]) byHood[hoodKey].assignments[addrId] = selected[addrId];
+  });
+  return byHood;
+}
+
 function saveAssignments() {
-  if (!currentCanvasserId || !shiftData.neighborhood) { showToast('Select a canvasser first'); return; }
+  if (!currentCanvasserId || !shiftHoods.length) { showToast('Select a canvasser first'); return; }
   if (!adminRoute.length) { showToast('No addresses selected'); return; }
   var partnerId = document.getElementById('assign-partner').value;
-  var payload = {route:adminRoute, assignments:adminSelected};
-  var saves = [fbPut('/'+shiftData.neighborhood+'/assignments/'+shiftDate+'/'+currentCanvasserId, payload)];
-  if (partnerId && partnerId!==currentCanvasserId) {
-    saves.push(fbPut('/'+shiftData.neighborhood+'/assignments/'+shiftDate+'/'+partnerId, payload));
-  }
+  var byHood = splitRouteByNeighborhood(adminRoute, adminSelected);
+  var saves = [];
+  Object.keys(byHood).forEach(function(hoodKey){
+    var payload = byHood[hoodKey];
+    saves.push(fbPut('/'+hoodKey+'/assignments/'+shiftDate+'/'+currentCanvasserId, payload));
+    if (partnerId && partnerId!==currentCanvasserId) {
+      saves.push(fbPut('/'+hoodKey+'/assignments/'+shiftDate+'/'+partnerId, payload));
+    }
+  });
   Promise.all(saves).then(function(){
-    allAssignments[currentCanvasserId]=payload;
+    allAssignments[currentCanvasserId] = {route:adminRoute.slice(), assignments:Object.assign({},adminSelected)};
     showToast('Route saved for '+volName(currentCanvasserId));
   }).catch(function(){ showToast('Save failed'); });
 }
@@ -942,10 +1042,19 @@ function buildDangerZone() {
     return '<div class="vol-check-item'+(checked?' checked':'')+'" data-id="'+v.id+'" onclick="this.classList.toggle(\'checked\')">'
       +'<div class="vci-box">&#x2713;</div><div class="vci-name">'+escapeHtml(v.name)+'</div></div>';
   }).join('');
+
+  var hoodGrid = document.getElementById('edit-hood-grid');
+  hoodGrid.innerHTML = (window.NEIGHBORHOODS||[]).map(function(n){
+    var checked = shiftHoods.indexOf(n.key) !== -1;
+    return '<div class="vol-check-item hood-check-item'+(checked?' checked':'')+'" data-key="'+n.key+'" onclick="this.classList.toggle(\'checked\')" style="padding:5px 10px;">'
+      +'<div class="vci-box">&#x2713;</div><div class="vci-name" style="font-size:12px;">'+escapeHtml(n.displayName)+'</div></div>';
+  }).join('');
 }
 function saveShiftEdits() {
   var notes = document.getElementById('edit-notes').value.trim();
   var vols = Array.from(document.querySelectorAll('#edit-vol-grid .vol-check-item.checked')).map(function(el){return el.dataset.id;});
+  var newHoods = Array.from(document.querySelectorAll('#edit-hood-grid .hood-check-item.checked')).map(function(el){return el.dataset.key;});
+  if (!newHoods.length) { showToast('Select at least one neighborhood'); return; }
   var dateEl = document.getElementById('edit-date');
   var _hasRealLogs = allLogs && Object.keys(allLogs).length > 0;
   var _canReschedule = !isPastShift || !_hasRealLogs;
@@ -956,6 +1065,14 @@ function saveShiftEdits() {
   // type="date"> field is browser-constrained to this format already,
   // but this makes it provably safe rather than just practically safe.
   var newDate = /^\d{4}-\d{2}-\d{2}$/.test(rawNewDate) ? rawNewDate : shiftDate;
+
+  // Update shiftHoods/shiftData up front so both the reschedule path and
+  // the direct-save path below pick up the change consistently — note
+  // this only changes which neighborhoods are available for NEW planning,
+  // it does not move any already-saved routes between neighborhoods.
+  shiftHoods = newHoods;
+  shiftData.neighborhoods = newHoods;
+  shiftData.neighborhood = newHoods[0];
 
   if (newDate && newDate !== shiftDate) {
     rescheduleShift(newDate, notes, vols);
@@ -975,7 +1092,7 @@ function rescheduleShift(newDate, notes, vols) {
     document.getElementById('edit-date').value = (shiftDate.indexOf('anytime') === 0) ? '' : shiftDate;
     return;
   }
-  var hood = shiftData.neighborhood;
+  var hoods = shiftHoods;
   var oldDate = shiftDate;
 
   fbGet('/canvass-days/'+newDate).then(function(existing){
@@ -984,29 +1101,34 @@ function rescheduleShift(newDate, notes, vols) {
       document.getElementById('edit-date').value = oldDate;
       return Promise.reject('exists');
     }
-    return Promise.all([
-      fbGet('/'+hood+'/assignments/'+oldDate),
-      fbGet('/'+hood+'/logs/'+oldDate),
-      fbGet('/'+hood+'/buckets/'+oldDate),
-    ]);
-  }).then(function(results){
-    var oldAssignments = results[0] || null;
-    var oldLogs = results[1] || null;
-    var oldBuckets = results[2] || null;
-
+    return Promise.all(hoods.map(function(hood){
+      return Promise.all([
+        fbGet('/'+hood+'/assignments/'+oldDate),
+        fbGet('/'+hood+'/logs/'+oldDate),
+        fbGet('/'+hood+'/buckets/'+oldDate),
+      ]);
+    }));
+  }).then(function(perHoodResults){
     var updatedShiftData = Object.assign({}, shiftData, {notes: notes, volunteers: vols});
-
     var writes = [fbPut('/canvass-days/'+newDate, updatedShiftData)];
-    if (oldAssignments) writes.push(fbPut('/'+hood+'/assignments/'+newDate, oldAssignments));
-    if (oldLogs) writes.push(fbPut('/'+hood+'/logs/'+newDate, oldLogs));
-    if (oldBuckets) writes.push(fbPut('/'+hood+'/buckets/'+newDate, oldBuckets));
+
+    hoods.forEach(function(hood, i){
+      var oldAssignments = perHoodResults[i][0] || null;
+      var oldLogs = perHoodResults[i][1] || null;
+      var oldBuckets = perHoodResults[i][2] || null;
+      if (oldAssignments) writes.push(fbPut('/'+hood+'/assignments/'+newDate, oldAssignments));
+      if (oldLogs) writes.push(fbPut('/'+hood+'/logs/'+newDate, oldLogs));
+      if (oldBuckets) writes.push(fbPut('/'+hood+'/buckets/'+newDate, oldBuckets));
+    });
 
     return Promise.all(writes);
   }).then(function(){
     var deletes = [fbPut('/canvass-days/'+oldDate, null)];
-    deletes.push(fbPut('/'+hood+'/assignments/'+oldDate, null));
-    deletes.push(fbPut('/'+hood+'/logs/'+oldDate, null));
-    deletes.push(fbPut('/'+hood+'/buckets/'+oldDate, null));
+    hoods.forEach(function(hood){
+      deletes.push(fbPut('/'+hood+'/assignments/'+oldDate, null));
+      deletes.push(fbPut('/'+hood+'/logs/'+oldDate, null));
+      deletes.push(fbPut('/'+hood+'/buckets/'+oldDate, null));
+    });
     return Promise.all(deletes);
   }).then(function(){
     window.location.href = 'shift.html?date='+newDate;
@@ -1032,17 +1154,13 @@ function printWalkSheet() {
   var addrMap={};
   adminAddresses.forEach(function(a){addrMap[a.id]=a;});
   var sorted = adminRoute.filter(function(id){return !!addrMap[id];}).map(function(id){return addrMap[id];});
-  var hood=(window.NEIGHBORHOODS||[]).find(function(n){return n.key===shiftData.neighborhood;});
-  var hoodName=hood?hood.displayName:(shiftData.neighborhood||'');
+  var hoodName = shiftHoods.map(function(key){
+    var h = (window.NEIGHBORHOODS||[]).find(function(n){return n.key===key;});
+    return h ? h.displayName : key;
+  }).join(' + ');
   var names=volName(currentCanvasserId);
   var partnerId = document.getElementById('assign-partner').value;
   if (partnerId && partnerId!==currentCanvasserId) names += ' & '+volName(partnerId);
-
-  // Build a QR code linking to live turn-by-turn directions in Google Maps
-  var gmWaypoints = sorted.slice(0,23).map(function(a){return a.lat+','+a.lng;}).join('/');
-  var googleMapsUrl = 'https://www.google.com/maps/dir/'+gmWaypoints;
-  var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='+encodeURIComponent(googleMapsUrl);
-  var routeTruncated = sorted.length > 23;
 
   // Route map data for the print window's OWN Leaflet instance — printing a
   // real, browser-rendered map avoids the CORS/canvas-taint problems that
@@ -1078,7 +1196,7 @@ function printWalkSheet() {
     +'.footer{margin-top:8px;padding-top:4px;border-top:1px solid #e0ddd3;font-size:7.5pt;color:#a8a49a;display:flex;justify-content:space-between;}'
     +'@media print{body{margin:0;}tr{page-break-inside:avoid;}img{page-break-after:avoid;}}';
 
-  var mapCss = '#walk-map{width:100%;height:75mm;border:1px solid #e0ddd3;border-radius:4px;margin-bottom:2px;}'
+  var mapCss = '#walk-map{width:100%;height:105mm;border:1px solid #e0ddd3;border-radius:4px;margin-bottom:2px;}'
     +'.wm-cap{font-size:7pt;color:#a8a49a;text-align:center;margin-bottom:10px;}'
     +'.wm-num{background:#D4A832;color:#1A1A1A;border-radius:50%;width:16px;height:16px;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;border:1.5px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3);}';
 
@@ -1091,13 +1209,6 @@ function printWalkSheet() {
     +'<div class="hdr-r"><div class="cnt">'+sorted.length+'</div><div class="lbl">Addresses</div></div></div>'
     +'<div id="walk-map"></div>'
     +'<div class="wm-cap">Route map &middot; numbers correspond to list below</div>'
-    +'<div style="margin-bottom:10px;display:flex;align-items:center;gap:12px;padding:8px;border:1px solid #e0ddd3;border-radius:6px;background:#faf8f4;">'
-      +'<img src="'+qrUrl+'" style="width:80px;height:80px;flex-shrink:0;" />'
-      +'<div style="font-size:8pt;color:#4b463a;">'
-        +'<strong>Scan for turn-by-turn directions</strong><br>'
-        +'Opens the full route in Google Maps'+(routeTruncated?' (first 23 stops — Google Maps link limit)':'')
-      +'</div>'
-    +'</div>'
     +'<table><thead><tr><th></th><th class="al">Address</th><th>Not Home</th><th>Vacant</th><th>For Sale</th><th>No Solic.</th><th>No Access</th><th>Dog</th><th>Refused</th><th>Accepted</th><th>Other</th><th style="text-align:left;padding-left:6px;">Notes / Contact / Sign</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table>'
     +'<div class="footer"><span>Cassie Iverson for Roseville City Council 2026 &middot; cassie4roseville.com</span><span>Printed '+new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</span></div>'
