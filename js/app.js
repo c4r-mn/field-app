@@ -660,9 +660,13 @@ function updateAllLegend(){
 }
 
 
-function setFbBase() {
-  fbBase = (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.databaseURL) || '';
-}
+// setFbBase() is defined once in firebase.js — removed the duplicate here,
+// which was silently shadowing the real one (and the real fbFetch/fbGet/
+// fbPut/fbPatch below) since this file loads after firebase.js and plain
+// function declarations in global scope let the later one win with no
+// warning. This was the actual root cause of the persistent 401s on
+// auth-required paths: every request from the canvasser app was using
+// this old, token-less fbFetch instead of the fixed one in firebase.js.
 
 // Roster: id -> {name, status, added}
 var roster = {};
@@ -691,7 +695,7 @@ var modalId = null;
 var pendingLatLng = null;
 var map = null;
 var mobileShowingMap = true;
-var todayKey = new Date().toISOString().slice(0,10);
+var todayKey = (function(){var _d=new Date();return _d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');})();
 var pollTimer = null;
 
 // Admin state
@@ -707,19 +711,10 @@ var adminMap = null;
 var adminDrawLayer = null;
 var adminMapView = 'single';
 
-// ── HELPERS ───────────────────────────────
-function fbFetch(path, opts) {
-  return fetch(fbBase + path + '.json', opts || {});
-}
-function fbGet(path) {
-  return fbFetch(path).then(function(r){return r.json();});
-}
-function fbPut(path, data) {
-  return fbFetch(path, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-}
-function fbPatch(path, data) {
-  return fbFetch(path, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-}
+// fbFetch/fbGet/fbPut/fbPatch also removed from here — same shadowing
+// issue as setFbBase above. The real, correct versions (with token
+// attachment) live in firebase.js and are used automatically now that
+// these duplicates are gone.
 
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2,6);
