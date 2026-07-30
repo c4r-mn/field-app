@@ -1161,6 +1161,9 @@ function printWalkSheet() {
   var names=volName(currentCanvasserId);
   var partnerId = document.getElementById('assign-partner').value;
   if (partnerId && partnerId!==currentCanvasserId) names += ' & '+volName(partnerId);
+  var safeNames = escapeHtml(names);
+  var safeHoodName = escapeHtml(hoodName);
+  var safeShiftDate = escapeHtml(formatDateLong(shiftDate));
 
   // Route map data for the print window's OWN Leaflet instance — printing a
   // real, browser-rendered map avoids the CORS/canvas-taint problems that
@@ -1205,7 +1208,7 @@ function printWalkSheet() {
     +'<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">'
     +'<title>Walk Sheet</title><style>'+css+mapCss+'</style></head><body>'
     +'<div class="page">'
-    +'<div class="hdr"><div class="hdr-l"><div class="camp">Cassie for Roseville &mdash; Field App</div><div class="title">Walk Sheet: '+names+'</div><div class="meta">'+hoodName+' &middot; '+formatDateLong(shiftDate)+'</div></div>'
+    +'<div class="hdr"><div class="hdr-l"><div class="camp">Cassie for Roseville &mdash; Field App</div><div class="title">Walk Sheet: '+safeNames+'</div><div class="meta">'+safeHoodName+' &middot; '+safeShiftDate+'</div></div>'
     +'<div class="hdr-r"><div class="cnt">'+sorted.length+'</div><div class="lbl">Addresses</div></div></div>'
     +'<div id="walk-map"></div>'
     +'<div class="wm-cap">Route map &middot; numbers correspond to list below</div>'
