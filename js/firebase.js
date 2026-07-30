@@ -14,18 +14,7 @@ function fbFetch(path, opts) {
   // missing entirely, which worked only because old test-mode rules didn't
   // check auth status at all. Real rules require this.
   var user = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
-  // TEMPORARY DIAGNOSTIC — single concatenated string (not multi-arg) in
-  // case Chrome's console text filter behaves oddly with multiple args.
-  var _diagMsg = 'FBFETCH_CALL path=' + path + ' currentUser=' + (user ? user.email : 'NULL') + ' authExists=' + (typeof firebase !== 'undefined' && !!firebase.auth);
-  console.log(_diagMsg);
   var tokenPromise = user ? user.getIdToken(false) : Promise.resolve(null);
-  if (tokenPromise && tokenPromise.then) {
-    tokenPromise.then(function(t){
-      console.log('FBFETCH_TOKEN path=' + path + ' token=' + (t ? ('YES len='+t.length) : 'NULL'));
-    }).catch(function(e){
-      console.log('FBFETCH_TOKEN_ERROR path=' + path + ' error=' + (e && e.message));
-    });
-  }
 
   // Safety timeout — if getIdToken() ever stalls (seen intermittently on
   // some mobile/network conditions), don't hang the whole app forever
