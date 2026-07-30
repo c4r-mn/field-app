@@ -2,10 +2,24 @@
 // Auth module — loaded on every page
 
 // ── EMERGENCY SIGNOUT ────────────────────────────────────────────────────────
+// Firebase Auth's real persisted session lives in IndexedDB (a database
+// called firebaseLocalStorageDb), not localStorage — clearing localStorage
+// alone does not actually sign anyone out. This clears both.
+function _nukeFirebaseSession() {
+  try {
+    Object.keys(localStorage).forEach(function(k) {
+      if (k.indexOf('firebase') !== -1) localStorage.removeItem(k);
+    });
+  } catch (e) {}
+  try {
+    if (window.indexedDB && indexedDB.deleteDatabase) {
+      indexedDB.deleteDatabase('firebaseLocalStorageDb');
+    }
+  } catch (e) {}
+}
+
 if (window.location.search.indexOf('signout=1') !== -1) {
-  Object.keys(localStorage).forEach(function(k) {
-    if (k.indexOf('firebase') !== -1) localStorage.removeItem(k);
-  });
+  _nukeFirebaseSession();
   window.location.href = '/field-app/';
 }
 
@@ -17,9 +31,7 @@ var _currentUser = null;
 // ── STUBS (replaced once Firebase loads) ─────────────────────────────────────
 window.doEmailLogin = function() { showAuthMsg('Loading… please wait'); };
 window.doSignOut = function() {
-  Object.keys(localStorage).forEach(function(k) {
-    if (k.indexOf('firebase') !== -1) localStorage.removeItem(k);
-  });
+  _nukeFirebaseSession();
   window.location.href = '/field-app/';
 };
 window.toggleAuthPwVisible = function() {
@@ -125,7 +137,7 @@ function startFirebase(onAdmin, onCanvasser) {
         // callback with the real user before redirecting away.
         pendingNullRedirect = setTimeout(function() {
           if (!auth.currentUser) window.location.href = '/field-app/';
-        }, 1800);
+        }, 4000);
         authSeenOnce = true;
         return;
       }
