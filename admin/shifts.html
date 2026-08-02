@@ -60,10 +60,9 @@
           </label>
         </div>
         <div class="form-col">
-          <label class="form-label">Neighborhood</label>
-          <select class="form-input" id="new-hood">
-            <option value="">— Select —</option>
-          </select>
+          <label class="form-label">Neighborhood(s)</label>
+          <div id="new-hood-grid" style="display:flex;flex-wrap:wrap;gap:6px;max-height:120px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px;"></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;">Check more than one to combine neighborhoods into a single route.</div>
         </div>
       </div>
       <div class="form-group">
@@ -134,17 +133,15 @@ function activeVols() {
 }
 
 function buildNewForm() {
-  var sel = document.getElementById('new-hood');
-  // Reset first to prevent duplicates
-  sel.innerHTML = '<option value="">— Select neighborhood —</option>';
-  (window.NEIGHBORHOODS||[]).forEach(function(n) {
-    var o = document.createElement('option');
-    o.value = n.key; o.textContent = n.displayName;
-    sel.appendChild(o);
-  });
-  // If only one neighborhood, auto-select it
+  var hoodGrid = document.getElementById('new-hood-grid');
+  hoodGrid.innerHTML = (window.NEIGHBORHOODS||[]).map(function(n) {
+    return '<div class="vol-check-item hood-check-item" data-key="'+n.key+'" onclick="this.classList.toggle(\'checked\')" style="padding:5px 10px;">' +
+      '<div class="vci-box">✓</div><div class="vci-name" style="font-size:12px;">'+n.displayName+'</div></div>';
+  }).join('');
+  // If only one neighborhood exists, auto-check it
   if ((window.NEIGHBORHOODS||[]).length === 1) {
-    sel.value = window.NEIGHBORHOODS[0].key;
+    var only = hoodGrid.querySelector('.hood-check-item');
+    if (only) only.classList.add('checked');
   }
   var grid = document.getElementById('new-vol-grid');
   var vols = activeVols();
@@ -164,6 +161,11 @@ function toggleNewForm() {
     document.getElementById('new-anytime').checked = false;
     document.getElementById('new-date').disabled = false;
     document.querySelectorAll('#new-vol-grid .vol-check-item').forEach(function(el){ el.classList.remove('checked'); });
+    document.querySelectorAll('#new-hood-grid .hood-check-item').forEach(function(el){ el.classList.remove('checked'); });
+    if ((window.NEIGHBORHOODS||[]).length === 1) {
+      var only = document.querySelector('#new-hood-grid .hood-check-item');
+      if (only) only.classList.add('checked');
+    }
   }
 }
 
@@ -180,24 +182,30 @@ function saveNewShift() {
   // than one fixed "anytime" key, so multiple flexible shifts can coexist
   // — different volunteers, different neighborhoods, whatever's needed.
   var date = isAnytime ? ('anytime-' + Date.now()) : document.getElementById('new-date').value;
-  var hood = document.getElementById('new-hood').value;
+  var hoods = Array.from(document.querySelectorAll('#new-hood-grid .hood-check-item.checked')).map(function(el){ return el.dataset.key; });
   var notes = document.getElementById('new-notes').value.trim();
   if (!isAnytime && !date) { showToast('Pick a date, or check "No specific date"'); return; }
-  if (!hood) { showToast('Pick a neighborhood'); return; }
+  if (!hoods.length) { showToast('Pick at least one neighborhood'); return; }
   var vols = Array.from(document.querySelectorAll('#new-vol-grid .vol-check-item.checked')).map(function(el){ return el.dataset.id; });
-  var shiftObj = { neighborhood:hood, notes:notes, volunteers:vols, created:new Date().toISOString() };
+  // neighborhoods (plural) is the real field going forward — neighborhood
+  // (singular) is kept in sync as the first entry, for any older code that
+  // hasn't been updated to read the array yet.
+  var shiftObj = { neighborhoods:hoods, neighborhood:hoods[0], notes:notes, volunteers:vols, created:new Date().toISOString() };
   fbPut('/canvass-days/'+date, shiftObj).then(function() {
     showToast('Shift created — opening route planner...');
     setTimeout(function(){
-      window.location.href = '/field-app/admin/shift.html?date=' + encodeURIComponent(date);
+      window.location.href = '/field-app/admin/shift.html?date='+date;
     }, 500);
   }).catch(function(){ showToast('Save failed'); });
 }
 
 function renderShifts() {
   var days = Object.entries(canvassDays).sort(function(a,b){ return a[0].localeCompare(b[0]); });
-  var upcoming = days.filter(function(p){ return p[0]>=today; });
-  var past = days.filter(function(p){ return p[0]<today; }).reverse();
+  // A closed shift (route explicitly marked done, mainly for Anytime
+  // shifts which never naturally become "past" by date) shows in Past
+  // regardless of what its date string says.
+  var upcoming = days.filter(function(p){ return p[0]>=today && !p[1].closed; });
+  var past = days.filter(function(p){ return p[0]<today || p[1].closed; }).reverse();
 
   function card(pair) {
     var date=pair[0], day=pair[1];
@@ -211,7 +219,7 @@ function renderShifts() {
     return '<div class="shift-item">' +
       badgeHtml +
       '<div class="shift-info">' +
-        '<div class="shift-hood">'+hoodName+(day.notes?' · '+day.notes:'')+'</div>' +
+        '<div class="shift-hood">'+hoodName+(day.notes?' · '+day.notes:'')+(day.closed?' <span style="color:var(--red,#c0392b);font-size:11px;font-weight:700;">&middot; CLOSED</span>':'')+'</div>' +
         '<div class="shift-meta">'+formatDate(date)+'</div>' +
         (vols.length?'<div class="shift-vols">'+vols.map(function(n){return '<span class="shift-vol-pill">'+n+'</span>';}).join('')+'</div>':'') +
       '</div>' +
