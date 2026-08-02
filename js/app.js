@@ -1296,7 +1296,9 @@ function buildSetupSelects() {
     ds.innerHTML='<option value="">— Select shift date —</option>';
     var now=new Date();
     var today=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
-    var days=Object.keys(canvassDays).sort().reverse();
+    var days=Object.keys(canvassDays).sort().reverse().filter(function(date){
+      return !(canvassDays[date]&&canvassDays[date].closed); // closed routes drop off the list entirely
+    });
     // Only show dates that have a real shift scheduled — no synthetic "today" entry
     days.forEach(function(date){
       var o=document.createElement('option');
