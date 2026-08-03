@@ -157,6 +157,7 @@
 
     <!-- Stats (shown once addresses are logged) -->
     <div id="cv-stats" class="stat-row" style="margin-bottom:16px;display:none;"></div>
+    <button class="btn btn-ghost btn-sm" onclick="debugLogBreakdown()" style="margin-bottom:16px;">🔍 Debug: Show Log Breakdown by Canvasser</button>
 
     <!-- Notes -->
     <div class="page-card" style="margin-bottom:16px;display:none;" id="notes-card">
@@ -738,9 +739,27 @@ function assignBucketsToCanvasser() {
   }).catch(function(){ showToast('Assign failed'); });
 }
 
+function debugLogBreakdown() {
+  var lines = ['DATE: '+shiftDate, 'NEIGHBORHOODS: '+shiftHoods.join(', '), 'CURRENT CANVASSER: '+volName(currentCanvasserId)+' ('+currentCanvasserId+')', ''];
+  Object.keys(allLogs).forEach(function(volId){
+    var entries = Object.values(allLogs[volId]||{});
+    var eventCount = entries.filter(function(l){return l.isEvent;}).length;
+    lines.push(volName(volId)+' ('+volId+'): '+entries.length+' total entries, '+eventCount+' from Meet & Greet');
+  });
+  lines.push('');
+  lines.push('ASSIGNED to current canvasser: '+((allAssignments[currentCanvasserId]&&allAssignments[currentCanvasserId].route)||[]).length);
+  alert(lines.join('\n'));
+}
+
 function renderStats() {
   var volLogs = allLogs[currentCanvasserId] || {};
-  var logs = Object.values(volLogs);
+  var allEntries = Object.values(volLogs);
+  // Meet & Greet entries are real, legitimate logs but represent an event
+  // (a whole building bulk-marked Accepted), not door-to-door contact —
+  // counting them as "Doors Knocked" inflates that number well past what
+  // was actually assigned/walked, which is confusing. Split them out.
+  var logs = allEntries.filter(function(l){ return !l.isEvent; });
+  var eventLogs = allEntries.filter(function(l){ return l.isEvent; });
   var accepted = logs.filter(function(l){return l.contact==='Accepted';}).length;
   var contact = logs.filter(function(l){return l.wantContact;}).length;
   var signs = logs.filter(function(l){return l.wantSign;}).length;
@@ -755,7 +774,8 @@ function renderStats() {
     statCard(signs,'Yard Signs','#D4A832')+
     statCard(nosolic,'No Soliciting','#c0392b')+
     statCard(noaccess,'No Access','#78716c')+
-    statCard(dogpresent,'Dog Present','#ea580c');
+    statCard(dogpresent,'Dog Present','#ea580c')+
+    (eventLogs.length ? statCard(eventLogs.length,'Meet & Greet','#D4A832') : '');
 }
 function statCard(n,label,color){
   return '<div class="stat-card"><div class="stat-n"'+(color?' style="color:'+color+';"':'')+'>'+n+'</div><div class="stat-l">'+label+'</div></div>';
