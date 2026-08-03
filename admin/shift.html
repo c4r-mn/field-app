@@ -742,9 +742,6 @@ function assignBucketsToCanvasser() {
 function debugLogTimestamps() {
   var volLogs = allLogs[currentCanvasserId] || {};
   var entries = Object.entries(volLogs);
-  // Sort by time to see the real spread — if these are all from one
-  // recent canvassing session they'll cluster tightly; if there's stale
-  // data mixed in, there will be an obvious gap.
   entries.sort(function(a,b){
     var ta = a[1].time ? new Date(a[1].time).getTime() : 0;
     var tb = b[1].time ? new Date(b[1].time).getTime() : 0;
@@ -758,14 +755,21 @@ function debugLogTimestamps() {
     var timeLabel = log.time ? new Date(log.time).toLocaleString() : 'NO TIMESTAMP';
     lines.push((i+1)+'. '+timeLabel+' — '+addrLabel+' — '+(log.contact||'no result')+(log.isEvent?' [EVENT]':''));
   });
-  // Show first 20 and last 20 if there are a lot, so the popup isn't unusable
-  if (lines.length > 45) {
-    var head = lines.slice(0, 22);
-    var tail = lines.slice(-20);
-    alert(head.join('\n') + '\n...\n(showing first 20 and last 20 of '+entries.length+')\n...\n' + tail.join('\n'));
-  } else {
-    alert(lines.join('\n'));
-  }
+
+  // Full, scrollable, copyable on-page panel instead of alert() — alerts
+  // get silently truncated by some browsers on long text and can't be
+  // selected/copied cleanly.
+  var existing = document.getElementById('debug-panel');
+  if (existing) existing.remove();
+  var panel = document.createElement('div');
+  panel.id = 'debug-panel';
+  panel.style.cssText = 'position:fixed;inset:20px;background:#fff;border:2px solid #D4A832;border-radius:10px;z-index:9999;padding:16px;display:flex;flex-direction:column;box-shadow:0 8px 30px rgba(0,0,0,.3);';
+  panel.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
+    + '<strong>Log Timestamps — '+entries.length+' entries</strong>'
+    + '<button class="btn btn-sm" onclick="document.getElementById(\'debug-panel\').remove()">Close</button>'
+    + '</div>'
+    + '<textarea readonly style="flex:1;width:100%;font-family:monospace;font-size:12px;resize:none;padding:10px;">'+lines.join('\n')+'</textarea>';
+  document.body.appendChild(panel);
 }
 
 function renderStats() {
