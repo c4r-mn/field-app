@@ -701,7 +701,8 @@ var neighborhoodKeys = [];
 var addresses = [];
 var mode = 'canvass';
 var activeFilter = 'all';
-var logs = {};
+var logs = {};   // merged view: my doors + everyone else's, for map/list display only
+var myLogs = {}; // MY OWN doors only — this is what actually gets pushed to Firebase
 var myAssignments = {};
 var myRoute = [];
 var addrToVolId = {};
@@ -1353,7 +1354,7 @@ function startApp() {
       addresses.push(Object.assign({}, a, {_hoodKey: hk}));
     });
   });
-  myAssignments={}; signs=[]; addrToVolId={};
+  logs={}; myLogs={}; myAssignments={}; signs=[]; addrToVolId={};
   if(!map) initMap(); else {refreshAllMarkers();fitBounds();}
   var dot=document.getElementById('fb-dot'),lbl=document.getElementById('fb-lbl');
   if(dot) dot.style.background='#d97706'; if(lbl) lbl.textContent='Connecting…';
@@ -1384,7 +1385,7 @@ function showUserMenu() {
 function saveAndExit() {
   pushLogs();
   setTimeout(function(){
-    logs={}; signs=[]; myAssignments={}; addrToVolId={};
+    logs={}; myLogs={}; signs=[]; myAssignments={}; addrToVolId={};
     if(pollTimer) clearInterval(pollTimer);
     doSignOut();
   },500);
@@ -1609,6 +1610,7 @@ function saveDoor(){
     propType:addr?addr.t:'house',
     time:new Date().toISOString(),
   };
+  myLogs[modalId]=logs[modalId];
   refreshMarker(modalId);
   if(markers[modalId]&&addr) markers[modalId].setPopupContent(makePopup(addr));
   renderMyList(); renderAllList(); renderLog(); updateStats();
@@ -1683,7 +1685,7 @@ function buildCSV(){
 
 function exportCSV(){var csv=buildCSV(),blob=new Blob([csv],{type:'text/csv'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='cassie-canvass-'+neighborhoodKey+'-'+todayKey+'.csv';a.click();URL.revokeObjectURL(url);showToast('CSV downloaded');}
 function copyCSV(){navigator.clipboard.writeText(buildCSV()).then(function(){showToast('Copied');}).catch(function(){showToast('Try Download');});}
-function confirmClear(){if(confirm('Clear all logged results?')){logs={};signs=[];signMarkers.forEach(function(m){map&&map.removeLayer(m);});signMarkers=[];refreshAllMarkers();renderMyList();renderAllList();renderLog();updateStats();showToast('Cleared');}}
+function confirmClear(){if(confirm('Clear all logged results?')){logs={};myLogs={};signs=[];signMarkers.forEach(function(m){map&&map.removeLayer(m);});signMarkers=[];refreshAllMarkers();renderMyList();renderAllList();renderLog();updateStats();showToast('Cleared');}}
 
 // ── FIREBASE CANVASSER ────────────────────
 function pushLogs(){
@@ -1694,12 +1696,12 @@ function pushLogs(){
   var addrMap = {};
   addresses.forEach(function(a){ addrMap[a.id] = a; });
   var logsByHood = {};
-  Object.keys(logs).forEach(function(addrId){
+  Object.keys(myLogs).forEach(function(addrId){
     var addr = addrMap[addrId];
     var hk = addr ? addr._hoodKey : neighborhoodKey;
     if (!hk) return;
     if (!logsByHood[hk]) logsByHood[hk] = {};
-    logsByHood[hk][addrId] = logs[addrId];
+    logsByHood[hk][addrId] = myLogs[addrId];
   });
   Object.keys(logsByHood).forEach(function(hk){
     fbPut('/'+hk+'/logs/'+todayKey+'/'+myVolId, logsByHood[hk]).catch(function(){});
@@ -1773,9 +1775,18 @@ function pullCanvasserData(){
     var changed=false;
     results.forEach(function(d){
       if(!d||typeof d!=='object') return;
-      Object.values(d).forEach(function(vl){
+      Object.entries(d).forEach(function(pair){
+        var vid=pair[0], vl=pair[1];
         if(!vl||typeof vl!=='object') return;
-        Object.entries(vl).forEach(function(p){if(!logs[p[0]]){logs[p[0]]=p[1];refreshMarker(p[0]);changed=true;}});
+        Object.entries(vl).forEach(function(p){
+          var addrId=p[0], entry=p[1];
+          // Merge into `logs` for display (grey markers, All tab) regardless of who logged it.
+          if(!logs[addrId]){logs[addrId]=entry;refreshMarker(addrId);changed=true;}
+          // Only rehydrate `myLogs` — the push-back source — from entries that are
+          // actually MINE. This never absorbs another canvasser's doors, even on
+          // reconnect/refresh, so pushLogs() can never re-upload someone else's work.
+          if(vid===myVolId && !myLogs[addrId]){myLogs[addrId]=entry;}
+        });
       });
     });
     if(changed){renderMyList();renderAllList();renderLog();updateStats();}
