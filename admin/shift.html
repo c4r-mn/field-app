@@ -157,8 +157,8 @@
 
     <!-- Stats (shown once addresses are logged) -->
     <div id="cv-stats" class="stat-row" style="margin-bottom:16px;display:none;"></div>
-    <button class="btn btn-ghost btn-sm" onclick="debugLogBreakdown()" style="margin-bottom:16px;">🔍 Debug: Show Log Breakdown by Canvasser</button>
-
+    <button class="btn btn-ghost btn-sm" onclick="debugLogTimestamps()" style="margin-bottom:16px;">🔍 Debug: Show Log Timestamps for Selected Canvasser</button>
+    
     <!-- Notes -->
     <div class="page-card" style="margin-bottom:16px;display:none;" id="notes-card">
       <div class="page-card-title">
@@ -739,16 +739,33 @@ function assignBucketsToCanvasser() {
   }).catch(function(){ showToast('Assign failed'); });
 }
 
-function debugLogBreakdown() {
-  var lines = ['DATE: '+shiftDate, 'NEIGHBORHOODS: '+shiftHoods.join(', '), 'CURRENT CANVASSER: '+volName(currentCanvasserId)+' ('+currentCanvasserId+')', ''];
-  Object.keys(allLogs).forEach(function(volId){
-    var entries = Object.values(allLogs[volId]||{});
-    var eventCount = entries.filter(function(l){return l.isEvent;}).length;
-    lines.push(volName(volId)+' ('+volId+'): '+entries.length+' total entries, '+eventCount+' from Meet & Greet');
+function debugLogTimestamps() {
+  var volLogs = allLogs[currentCanvasserId] || {};
+  var entries = Object.entries(volLogs);
+  // Sort by time to see the real spread — if these are all from one
+  // recent canvassing session they'll cluster tightly; if there's stale
+  // data mixed in, there will be an obvious gap.
+  entries.sort(function(a,b){
+    var ta = a[1].time ? new Date(a[1].time).getTime() : 0;
+    var tb = b[1].time ? new Date(b[1].time).getTime() : 0;
+    return ta - tb;
   });
-  lines.push('');
-  lines.push('ASSIGNED to current canvasser: '+((allAssignments[currentCanvasserId]&&allAssignments[currentCanvasserId].route)||[]).length);
-  alert(lines.join('\n'));
+  var lines = [volName(currentCanvasserId)+' — '+entries.length+' entries, oldest to newest:', ''];
+  entries.forEach(function(pair, i){
+    var addrId = pair[0], log = pair[1];
+    var addr = adminAddresses.find(function(a){return a.id===addrId;});
+    var addrLabel = addr ? (addr.n+' '+addr.s) : addrId;
+    var timeLabel = log.time ? new Date(log.time).toLocaleString() : 'NO TIMESTAMP';
+    lines.push((i+1)+'. '+timeLabel+' — '+addrLabel+' — '+(log.contact||'no result')+(log.isEvent?' [EVENT]':''));
+  });
+  // Show first 20 and last 20 if there are a lot, so the popup isn't unusable
+  if (lines.length > 45) {
+    var head = lines.slice(0, 22);
+    var tail = lines.slice(-20);
+    alert(head.join('\n') + '\n...\n(showing first 20 and last 20 of '+entries.length+')\n...\n' + tail.join('\n'));
+  } else {
+    alert(lines.join('\n'));
+  }
 }
 
 function renderStats() {
@@ -767,8 +784,8 @@ function renderStats() {
   var noaccess = logs.filter(function(l){return l.contact==='No Access';}).length;
   var dogpresent = logs.filter(function(l){return l.contact==='Dog Present';}).length;
   document.getElementById('cv-stats').innerHTML =
-    statCard(logs.length,'Doors Knocked')+
-    statCard(adminRoute.length,'Assigned')+
+    statCard(logs.length,'Total Doors Logged (all-time, this shift)')+
+    statCard(adminRoute.length,'Currently Assigned')+
     statCard(accepted,'Accepted','#27ae60')+
     statCard(contact,'Cassie to Contact','#D4A832')+
     statCard(signs,'Yard Signs','#D4A832')+
