@@ -51,6 +51,7 @@
         <button class="btn btn-ghost btn-sm" onclick="exportList('signs')">Yard Signs CSV</button>
         <button class="btn btn-ghost btn-sm" onclick="exportList('nosolic')">No Soliciting CSV</button>
         <button class="btn btn-gold btn-sm" onclick="bulkMarkLetterSent()">✉️ Mark Visible as Letter Sent</button>
+        <button class="btn btn-outline btn-sm" onclick="bulkUndoLetterSent()">↩️ Undo Letter Sent (visible)</button>
         <button class="btn btn-ghost btn-sm" onclick="exportList('noaccess')">No Access CSV</button>
         <button class="btn btn-ghost btn-sm" onclick="exportList('dogpresent')">Dog Present CSV</button>
       </div>
@@ -206,11 +207,53 @@ function toggleLetterColorView() {
   refreshFieldMarkers();
 }
 
+function hoodDisplayName(key) {
+  var n = (window.NEIGHBORHOODS || []).find(function(x){ return x.key === key; });
+  return n ? n.displayName : key;
+}
+
+function bulkUndoLetterSent() {
+  var candidates = [];
+  Object.entries(allLogs).forEach(function(pair){
+    var addrId = pair[0], log = pair[1];
+    if (!log || LETTER_ELIGIBLE.indexOf(log.contact) === -1) return;
+    if (activeHood !== 'all' && log.hoodKey !== activeHood) return;
+    if (activeDate !== 'all' && log.date !== activeDate) return;
+    if (!log.letterSent) return; // not marked, nothing to undo
+    if (!log.hoodKey || !log.date || !log.volId) return; // need a real path to write to
+    candidates.push(addrId);
+  });
+
+  if (!candidates.length) { showToast('No Letter Sent addresses in the current view to undo'); return; }
+
+  var hoodLabel = activeHood === 'all' ? 'ALL neighborhoods' : (hoodDisplayName(activeHood) || activeHood);
+  var dateLabel = activeDate === 'all' ? 'all dates' : activeDate;
+  if (!confirm('Undo Letter Sent on '+candidates.length+' address'+(candidates.length===1?'':'es')+' in '+hoodLabel+' ('+dateLabel+')? The original contact result is not affected — this only clears the letter-sent flag.')) return;
+
+  var writes = candidates.map(function(addrId){
+    var log = allLogs[addrId];
+    var path = '/'+log.hoodKey+'/logs/'+log.date+'/'+log.volId+'/'+addrId;
+    // fbPatch only touches the letterSent field — notes/contact/names are untouched
+    return fbPatch(path, {letterSent: false}).then(function(){
+      log.letterSent = false;
+    });
+  });
+
+  Promise.all(writes).then(function(){
+    showToast('Undid Letter Sent on '+candidates.length+' address'+(candidates.length===1?'':'es'));
+    refreshFieldMarkers();
+  }).catch(function(){
+    showToast('Some updates failed — please check and retry');
+    refreshFieldMarkers();
+  });
+}
+
 function bulkMarkLetterSent() {
   var candidates = [];
   Object.entries(allLogs).forEach(function(pair){
     var addrId = pair[0], log = pair[1];
     if (!log || LETTER_ELIGIBLE.indexOf(log.contact) === -1) return;
+    if (activeHood !== 'all' && log.hoodKey !== activeHood) return;
     if (activeDate !== 'all' && log.date !== activeDate) return;
     if (log.letterSent) return; // already marked, skip
     if (!log.hoodKey || !log.date || !log.volId) return; // need a real path to write to
@@ -219,8 +262,9 @@ function bulkMarkLetterSent() {
 
   if (!candidates.length) { showToast('No unmarked No Soliciting / No Access / Dog Present addresses in the current view'); return; }
 
+  var hoodLabel = activeHood === 'all' ? 'ALL neighborhoods' : (hoodDisplayName(activeHood) || activeHood);
   var dateLabel = activeDate === 'all' ? 'all dates' : activeDate;
-  if (!confirm('Mark '+candidates.length+' address'+(candidates.length===1?'':'es')+' ('+dateLabel+') as Letter Sent? The original contact result stays — this just adds a letter-sent record on top.')) return;
+  if (!confirm('Mark '+candidates.length+' address'+(candidates.length===1?'':'es')+' in '+hoodLabel+' ('+dateLabel+') as Letter Sent? The original contact result stays — this just adds a letter-sent record on top.')) return;
 
   var writes = candidates.map(function(addrId){
     var log = allLogs[addrId];
