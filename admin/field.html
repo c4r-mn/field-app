@@ -50,7 +50,7 @@
         <button class="btn btn-ghost btn-sm" onclick="exportList('contact')">Cassie to Contact CSV</button>
         <button class="btn btn-ghost btn-sm" onclick="exportList('signs')">Yard Signs CSV</button>
         <button class="btn btn-ghost btn-sm" onclick="exportList('nosolic')">No Soliciting CSV</button>
-        <button class="btn btn-gold btn-sm" onclick="bulkMarkLetterSent()">✉️ Mark Visible No Soliciting as Letter Sent</button>
+        <button class="btn btn-gold btn-sm" onclick="bulkMarkLetterSent()">✉️ Mark Visible as Letter Sent</button>
         <button class="btn btn-ghost btn-sm" onclick="exportList('noaccess')">No Access CSV</button>
         <button class="btn btn-ghost btn-sm" onclick="exportList('dogpresent')">Dog Present CSV</button>
       </div>
@@ -98,6 +98,8 @@
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#e0ddd3;border:1px solid #aaa;margin-right:4px;"></span>Not Knocked</span>
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#D4A832;margin-right:4px;"></span>Upcoming</span>
       <span style="color:#D4A832;">* = Cassie to Contact</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#0d9488;margin-right:4px;"></span>Letter Sent</span>
+      <div class="filter-pill active" id="toggle-letter-color" onclick="toggleLetterColorView()" style="margin-left:4px;">✉️ Highlight Letters Sent</div>
     </div>
 
     <div id="field-map" style="height:calc(100vh - 36px - 220px);min-height:400px;border-radius:10px;border:1px solid var(--border);"></div>
@@ -144,6 +146,11 @@ var PROP_META_FV = {
   mobile:           {label:'Mobile Home Park', color:'#7c3aed'},
 };
 var CONTACT_OPTIONS = ['Not Home','Vacant','For Sale','No Soliciting','No Access','Dog Present','Refused','Accepted','Other Language'];
+// Which contact results are eligible to be flagged "Letter Sent" — used by the
+// bulk action, the individual edit modal, and CSV exports, so all three stay in sync.
+var LETTER_ELIGIBLE = ['No Soliciting','No Access','Dog Present'];
+var LETTER_SENT_COLOR = '#0d9488'; // calm teal — distinct from the negative reds/oranges/browns, reads as "handled" not "problem"
+var showLetterSentColor = true; // toggle: recolor letter-sent markers so they don't look like unresolved problem doors
 
 var fvEditAddrId = null;
 
@@ -169,14 +176,23 @@ function openFvEdit(addrId) {
   document.getElementById('fv-phone').value = log.phone||'';
   document.getElementById('fv-chk-sign').classList.toggle('checked', !!log.wantSign);
   document.getElementById('fv-chk-letter').classList.toggle('checked', !!log.letterSent);
+  fvUpdateLetterRowVisibility(log.contact);
   document.getElementById('fv-notes').value = log.notes||'';
 
   document.getElementById('fv-edit-overlay').classList.add('open');
 }
 
+function fvUpdateLetterRowVisibility(contact) {
+  var row = document.getElementById('fv-chk-letter');
+  var eligible = LETTER_ELIGIBLE.indexOf(contact) !== -1;
+  row.style.display = eligible ? 'flex' : 'none';
+  if (!eligible) row.classList.remove('checked'); // don't save a stale letterSent flag for a non-eligible result
+}
+
 function fvSelContact(el) {
   document.querySelectorAll('#fv-contact-grid .contact-btn').forEach(function(b){b.classList.remove('active');});
   el.classList.add('active');
+  fvUpdateLetterRowVisibility(el.dataset.r);
 }
 
 function closeFvEdit() {
@@ -184,21 +200,27 @@ function closeFvEdit() {
   fvEditAddrId = null;
 }
 
+function toggleLetterColorView() {
+  showLetterSentColor = !showLetterSentColor;
+  document.getElementById('toggle-letter-color').classList.toggle('active', showLetterSentColor);
+  refreshFieldMarkers();
+}
+
 function bulkMarkLetterSent() {
   var candidates = [];
   Object.entries(allLogs).forEach(function(pair){
     var addrId = pair[0], log = pair[1];
-    if (!log || log.contact !== 'No Soliciting') return;
+    if (!log || LETTER_ELIGIBLE.indexOf(log.contact) === -1) return;
     if (activeDate !== 'all' && log.date !== activeDate) return;
     if (log.letterSent) return; // already marked, skip
     if (!log.hoodKey || !log.date || !log.volId) return; // need a real path to write to
     candidates.push(addrId);
   });
 
-  if (!candidates.length) { showToast('No unmarked No Soliciting addresses in the current view'); return; }
+  if (!candidates.length) { showToast('No unmarked No Soliciting / No Access / Dog Present addresses in the current view'); return; }
 
   var dateLabel = activeDate === 'all' ? 'all dates' : activeDate;
-  if (!confirm('Mark '+candidates.length+' No Soliciting address'+(candidates.length===1?'':'es')+' ('+dateLabel+') as Letter Sent? The red No Soliciting tag stays — this just adds a letter-sent record on top.')) return;
+  if (!confirm('Mark '+candidates.length+' address'+(candidates.length===1?'':'es')+' ('+dateLabel+') as Letter Sent? The original contact result stays — this just adds a letter-sent record on top.')) return;
 
   var writes = candidates.map(function(addrId){
     var log = allLogs[addrId];
@@ -442,11 +464,14 @@ function typeBadgeHtml(addrType) {
 
 function renderSingleMarker(addr, log, isLogged, isUpcoming) {
   var isContact = log && log.wantContact;
-  var isLetterSent = log && log.contact === 'No Soliciting' && log.letterSent;
+  var isLetterSent = log && LETTER_ELIGIBLE.indexOf(log.contact) !== -1 && log.letterSent;
   var color, radius, opacity;
   if (isLogged) { color=RESULT_COLORS[log.contact]||'#888'; radius=5; opacity=1; }
   else if (isUpcoming) { color='#D4A832'; radius=4; opacity=.7; }
   else { color='#e0ddd3'; radius=3.5; opacity=.5; }
+  // Once a letter's gone out, recolor the fill so the door reads as "handled"
+  // instead of still looking like an unresolved No Soliciting/No Access/Dog Present.
+  if (isLetterSent && showLetterSentColor) { color = LETTER_SENT_COLOR; }
 
   var marker = L.circleMarker([addr.lat, addr.lng], {
     renderer: canvasRenderer,
@@ -607,22 +632,22 @@ function exportList(type) {
       rows.push([addr?addr.n:'',addr?addr.u||'':'',addr?addr.s:'',log.date||'',log.letterSent?'Yes':'No'].map(csvCell).join(','));
     });
   } else if (type === 'noaccess') {
-    header = 'Address,Unit,Street,Date';
+    header = 'Address,Unit,Street,Date,Letter Sent';
     Object.entries(allLogs).forEach(function(pair) {
       var addrId=pair[0], log=pair[1];
       if (log.contact !== 'No Access') return;
       if (activeDate !== 'all' && log.date !== activeDate) return;
       var addr = findAddr(addrId);
-      rows.push([addr?addr.n:'',addr?addr.u||'':'',addr?addr.s:'',log.date||''].map(csvCell).join(','));
+      rows.push([addr?addr.n:'',addr?addr.u||'':'',addr?addr.s:'',log.date||'',log.letterSent?'Yes':'No'].map(csvCell).join(','));
     });
   } else if (type === 'dogpresent') {
-    header = 'Address,Unit,Street,Date';
+    header = 'Address,Unit,Street,Date,Letter Sent';
     Object.entries(allLogs).forEach(function(pair) {
       var addrId=pair[0], log=pair[1];
       if (log.contact !== 'Dog Present') return;
       if (activeDate !== 'all' && log.date !== activeDate) return;
       var addr = findAddr(addrId);
-      rows.push([addr?addr.n:'',addr?addr.u||'':'',addr?addr.s:'',log.date||''].map(csvCell).join(','));
+      rows.push([addr?addr.n:'',addr?addr.u||'':'',addr?addr.s:'',log.date||'',log.letterSent?'Yes':'No'].map(csvCell).join(','));
     });
   }
   if (!rows.length) { showToast('No data to export'); return; }
