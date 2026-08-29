@@ -767,8 +767,12 @@ function debugLogTimestamps() {
   panel.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
     + '<strong>Log Timestamps — '+entries.length+' entries</strong>'
     + '<button class="btn btn-sm" onclick="document.getElementById(\'debug-panel\').remove()">Close</button>'
-    + '</div>'
-    + '<textarea readonly style="flex:1;width:100%;font-family:monospace;font-size:12px;resize:none;padding:10px;">'+lines.join('\n')+'</textarea>';
+    + '</div>';
+  var debugText = document.createElement('textarea');
+  debugText.readOnly = true;
+  debugText.style.cssText = 'flex:1;width:100%;font-family:monospace;font-size:12px;resize:none;padding:10px;';
+  debugText.value = lines.join('\n');
+  panel.appendChild(debugText);
   document.body.appendChild(panel);
 }
 
