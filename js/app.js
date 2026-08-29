@@ -506,8 +506,9 @@ function saveAssignments() {
 // ── ADMIN MAP ─────────────────────────────
 function initAdminMap() {
   adminMap = L.map('admin-map', {center:[45.017,-93.153], zoom:15});
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-    attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
+  L.maplibreGL({
+    style:'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json?key=cb1_2iy3_1_568cf565503c70c1a3e90b32',
+    attribution:'&copy; OpenStreetMap &copy; CARTO'
   }).addTo(adminMap);
   // Selection via map pin clicks and checklist only
 }
@@ -1104,8 +1105,9 @@ function saveAssignments() {
 // ── ADMIN MAP ─────────────────────────────
 function initAdminMap() {
   adminMap = L.map('admin-map', {center:[45.017,-93.153], zoom:15});
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-    attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20
+  L.maplibreGL({
+    style:'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json?key=cb1_2iy3_1_568cf565503c70c1a3e90b32',
+    attribution:'&copy; OpenStreetMap &copy; CARTO'
   }).addTo(adminMap);
   // Selection via map pin clicks and checklist only
 }
@@ -1395,7 +1397,7 @@ function saveAndExit() {
 
 function initMap(){
   map=L.map('map',{center:[45.017,-93.153],zoom:15});
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:20}).addTo(map);
+  L.maplibreGL({style:'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json?key=cb1_2iy3_1_568cf565503c70c1a3e90b32',attribution:'&copy; OpenStreetMap &copy; CARTO'}).addTo(map);
   map.whenReady(function(){
     addresses.forEach(function(addr){markers[addr.id]=createMarker(addr);});
     fitBounds(); renderMyList(); renderAllList(); renderLog(); updateStats();
