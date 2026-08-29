@@ -1255,6 +1255,8 @@ function printWalkSheet() {
   var names=volName(currentCanvasserId);
   var partnerId = document.getElementById('assign-partner').value;
   if (partnerId && partnerId!==currentCanvasserId) names += ' & '+volName(partnerId);
+  hoodName = escapeHtml(hoodName);
+  names = escapeHtml(names);
 
   // Route map data for the print window's OWN Leaflet instance — printing a
   // real, browser-rendered map avoids the CORS/canvas-taint problems that
