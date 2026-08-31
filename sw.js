@@ -36,7 +36,10 @@ self.addEventListener('fetch', function(e) {
   if (!e.request.url.startsWith('http')) return;
   if (e.request.url.indexOf('firebase') !== -1 ||
       e.request.url.indexOf('google') !== -1 ||
-      e.request.url.indexOf('config.json') !== -1) {
+      e.request.url.indexOf('config.json') !== -1 ||
+      e.request.url.indexOf('unpkg.com') !== -1 ||
+      e.request.url.indexOf('cartocdn.com') !== -1 ||
+      e.request.url.indexOf('carto.com') !== -1) {
     return;
   }
 
