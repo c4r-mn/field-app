@@ -770,8 +770,12 @@ function debugLogTimestamps() {
   panel.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
     + '<strong>Log Timestamps — '+entries.length+' entries</strong>'
     + '<button class="btn btn-sm" onclick="document.getElementById(\'debug-panel\').remove()">Close</button>'
-    + '</div>'
-    + '<textarea readonly style="flex:1;width:100%;font-family:monospace;font-size:12px;resize:none;padding:10px;">'+lines.join('\n')+'</textarea>';
+    + '</div>';
+  var debugText = document.createElement('textarea');
+  debugText.readOnly = true;
+  debugText.style.cssText = 'flex:1;width:100%;font-family:monospace;font-size:12px;resize:none;padding:10px;';
+  debugText.value = lines.join('\n');
+  panel.appendChild(debugText);
   document.body.appendChild(panel);
 }
 
@@ -1259,6 +1263,8 @@ function printWalkSheet() {
   var names=volName(currentCanvasserId);
   var partnerId = document.getElementById('assign-partner').value;
   if (partnerId && partnerId!==currentCanvasserId) names += ' & '+volName(partnerId);
+  hoodName = escapeHtml(hoodName);
+  names = escapeHtml(names);
 
   // Route map data for the print window's OWN Leaflet instance — printing a
   // real, browser-rendered map avoids the CORS/canvas-taint problems that
@@ -1328,9 +1334,6 @@ function printWalkSheet() {
     +'});'
     +'var printed = false;'
     +'function doPrint(){ if (printed) return; printed = true; setTimeout(function(){ window.print(); }, 200); }'
-    // MapLibre GL layers may not always re-emit Leaflet's "load" event the
-    // same way raster tile layers did — the 4s fallback below covers that
-    // case, so print still fires reliably either way.
     +'tiles.on("load", doPrint);'
     +'setTimeout(doPrint, 4000);' // fallback in case the load event doesn't fire
     +'<\/script>'
