@@ -1,5 +1,6 @@
 // Cassie for Roseville — Field App Service Worker
-var CACHE = 'c4r-v59';
+// No version number to track anymore — see the fetch handler below.
+var CACHE = 'c4r-offline-cache';
 
 // Only precache truly static assets — HTML is always network-first below,
 // so precaching it here just adds a fragile install-time dependency.
@@ -73,20 +74,23 @@ self.addEventListener('fetch', function(e) {
     return;
   }
 
-  // JS/CSS: cache-first, refresh in background.
-  // {cache:'reload'} forces bypassing the browser's own native HTTP
-  // cache (a layer below the Cache API we control here) — GitHub Pages
-  // sets caching headers on served files, and without this, the browser
-  // can transparently hand back a stale response to our own fetch()
-  // call even when we're deliberately trying to get a fresh one.
+  // JS/CSS: network-first, falling back to cache only if the request
+  // actually fails (e.g. offline in the field). This is what actually
+  // eliminates the need to bump a cache version for a deploy to take
+  // effect — the browser always tries a fresh copy first; the cache is
+  // now purely an offline safety net, not the source of truth for
+  // "is this the latest version."
+  // {cache:'reload'} still bypasses the browser's own native HTTP cache
+  // (a layer below the Cache API we control here) — GitHub Pages sets
+  // caching headers on served files, and without this, the browser can
+  // transparently hand back a stale response even on a fresh fetch() call.
   e.respondWith(
-    caches.match(e.request).then(function(cached) {
-      var fetchPromise = fetch(e.request, {cache: 'reload'}).then(function(resp) {
-        var clone = resp.clone();
-        caches.open(CACHE).then(function(c){ c.put(e.request, clone); });
-        return resp;
-      }).catch(function(){ return cached; });
-      return cached || fetchPromise;
+    fetch(e.request, {cache: 'reload'}).then(function(resp) {
+      var clone = resp.clone();
+      caches.open(CACHE).then(function(c){ c.put(e.request, clone); });
+      return resp;
+    }).catch(function() {
+      return caches.match(e.request);
     })
   );
 });
