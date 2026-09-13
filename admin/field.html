@@ -588,7 +588,7 @@ function renderSingleMarker(addr, log, isLogged, isUpcoming) {
 
   marker.bindPopup(function() {
     var popup = '<div style="min-width:200px;padding:6px 2px;">';
-    popup += '<strong>'+addr.n+' '+addr.s+(addr.u?' - '+addr.u:'')+'</strong>';
+    popup += '<strong>'+(addr.name?addr.name+' &mdash; ':'')+addr.n+' '+addr.s+(addr.u?' - '+addr.u:'')+'</strong>';
     popup += typeBadgeHtml(addr.t||'house');
     if (isLogged) {
       popup += '<div style="margin-top:8px;line-height:1.5;">';
@@ -643,7 +643,7 @@ function renderBuildingMarker(units) {
 
   marker.bindPopup(function() {
     var popup = '<div style="min-width:210px;padding:6px 2px;">';
-    popup += '<strong>'+first.n+' '+first.s+'</strong>';
+    popup += '<strong>'+(first.name?first.name+' &mdash; ':'')+first.n+' '+first.s+'</strong>';
     popup += typeBadgeHtml(first.t||'apartment');
     popup += '<div style="margin-top:8px;font-size:12px;line-height:1.6;">';
     popup += '<strong>'+unitCount+' units</strong> &middot; '+loggedCount+' logged<br>';
@@ -663,7 +663,7 @@ function openMeetGreet(buildingKey) {
   var units = buildingUnitsStore[buildingKey];
   if (!units || !units.length) return;
   var first = units[0];
-  var label = first.n+' '+first.s+' ('+units.length+' units)';
+  var label = (first.name?first.name+' — ':'')+first.n+' '+first.s+' ('+units.length+' units)';
   var today = new Date();
   var todayStr = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
 
