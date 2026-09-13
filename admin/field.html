@@ -101,6 +101,7 @@
       <div class="filter-pill active" data-type="condo" onclick="toggleType('condo')">Condo <span class="pill-count" id="count-condo">0</span></div>
       <div class="filter-pill active" data-type="apartment" onclick="toggleType('apartment')">Apartment <span class="pill-count" id="count-apartment">0</span></div>
       <div class="filter-pill active" data-type="senior" onclick="toggleType('senior')">55+ Community <span class="pill-count" id="count-senior">0</span></div>
+      <div class="filter-pill active" data-type="senior-apartment" onclick="toggleType('senior-apartment')">Senior Apartments <span class="pill-count" id="count-senior-apartment">0</span></div>
       <div class="filter-pill active" data-type="assisted" onclick="toggleType('assisted')">Assisted Living <span class="pill-count" id="count-assisted">0</span></div>
       <div class="filter-pill active" data-type="skilled-nursing" onclick="toggleType('skilled-nursing')">Skilled Nursing <span class="pill-count" id="count-skilled-nursing">0</span></div>
       <div class="filter-pill active" data-type="mobile" onclick="toggleType('mobile')">Mobile Home Park <span class="pill-count" id="count-mobile">0</span></div>
@@ -145,7 +146,7 @@ var activeDate = 'all';
 var activeHoods = new Set(); // set of selected neighborhood keys — empty until loadFieldData populates it
 var canvasRenderer = null;
 var showFilters = {completed:true,'not-knocked':true,upcoming:true,nosolic:true,noaccess:true,dogpresent:true,contact:true};
-var typeFilters = {house:true,townhome:true,'multi-family':true,condo:true,apartment:true,senior:true,assisted:true,'skilled-nursing':true,mobile:true};
+var typeFilters = {house:true,townhome:true,'multi-family':true,condo:true,apartment:true,senior:true,'senior-apartment':true,assisted:true,'skilled-nursing':true,mobile:true};
 var mapMarkers = {};
 var today = (function(){var _d=new Date();return _d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');})();
 
@@ -160,6 +161,7 @@ var PROP_META_FV = {
   condo:            {label:'Condo',            color:'#0891b2'},
   apartment:        {label:'Apartment',        color:'#2563eb'},
   senior:           {label:'55+ Community',    color:'#d97706'},
+  'senior-apartment':{label:'Senior Apartments',color:'#b45309'},
   assisted:         {label:'Assisted Living',  color:'#e67e22'},
   'skilled-nursing':{label:'Skilled Nursing',  color:'#dc2626'},
   mobile:           {label:'Mobile Home Park', color:'#7c3aed'},
@@ -495,14 +497,14 @@ function toggleType(key) {
   refreshFieldMarkers();
 }
 
-var MULTI_UNIT_TYPES = {apartment:true, condo:true, senior:true, assisted:true, 'skilled-nursing':true};
+var MULTI_UNIT_TYPES = {apartment:true, condo:true, senior:true, 'senior-apartment':true, assisted:true, 'skilled-nursing':true};
 
 function refreshFieldMarkers() {
   if (!fieldMap) return;
   Object.values(mapMarkers).forEach(function(m){ fieldMap.removeLayer(m); });
   mapMarkers = {};
   var bounds = [];
-  var typeTally = {house:0,townhome:0,'multi-family':0,condo:0,apartment:0,senior:0,assisted:0,'skilled-nursing':0,mobile:0};
+  var typeTally = {house:0,townhome:0,'multi-family':0,condo:0,apartment:0,senior:0,'senior-apartment':0,assisted:0,'skilled-nursing':0,mobile:0};
 
   // First pass: collect visible addresses, grouping apartment/condo units that
   // share a building coordinate so we render ONE marker per building instead
@@ -530,7 +532,12 @@ function refreshFieldMarkers() {
       if (!typeFilters[addrType]) return;
 
       if (MULTI_UNIT_TYPES[addrType]) {
-        var key = addr.lat.toFixed(6)+','+addr.lng.toFixed(6);
+        // Group by the complex's name when it has one — a real multi-building
+        // complex (like Coventry, spread across many distinct county-surveyed
+        // building coordinates) needs one marker for the whole named complex,
+        // not one per individual building coordinate. Buildings with no name
+        // still group by exact coordinate, same as before.
+        var key = addr.name ? ('name:'+addr.name) : (addr.lat.toFixed(6)+','+addr.lng.toFixed(6));
         if (!buildingGroups[key]) buildingGroups[key] = [];
         addr.hoodKey = n.key; // needed later for bulk meet & greet writes
         buildingGroups[key].push(addr);
@@ -544,8 +551,9 @@ function refreshFieldMarkers() {
   // Second pass: render one aggregated marker per building group
   Object.keys(buildingGroups).forEach(function(key) {
     var units = buildingGroups[key];
-    renderBuildingMarker(units);
-    bounds.push([units[0].lat, units[0].lng]);
+    var centroid = groupCentroid(units);
+    renderBuildingMarker(units, centroid);
+    bounds.push([centroid.lat, centroid.lng]);
   });
 
   Object.keys(typeTally).forEach(function(t){
@@ -612,11 +620,18 @@ function renderSingleMarker(addr, log, isLogged, isUpcoming) {
   mapMarkers[addr.id] = marker;
 }
 
-var MEET_GREET_TYPES = {apartment:true, condo:true, senior:true, assisted:true, 'skilled-nursing':true, mobile:true};
+var MEET_GREET_TYPES = {apartment:true, condo:true, senior:true, 'senior-apartment':true, assisted:true, 'skilled-nursing':true, mobile:true};
 var buildingUnitsStore = {};
 
-function renderBuildingMarker(units) {
+function groupCentroid(units) {
+  var lat = units.reduce(function(s,u){return s+u.lat;},0)/units.length;
+  var lng = units.reduce(function(s,u){return s+u.lng;},0)/units.length;
+  return {lat: lat, lng: lng};
+}
+
+function renderBuildingMarker(units, centroid) {
   var first = units[0];
+  var pos = centroid || {lat: first.lat, lng: first.lng};
   var unitCount = units.length;
   var loggedUnits = units.filter(function(u){ return !!allLogs[u.id]; });
   var loggedCount = loggedUnits.length;
@@ -628,7 +643,7 @@ function renderBuildingMarker(units) {
 
   var radius = 9; // larger — visually distinct as a "building" not a single door
 
-  var marker = L.circleMarker([first.lat, first.lng], {
+  var marker = L.circleMarker([pos.lat, pos.lng], {
     renderer: canvasRenderer,
     radius: radius,
     fillColor: color,
