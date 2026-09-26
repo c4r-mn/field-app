@@ -41,7 +41,7 @@ self.addEventListener('fetch', function(e) {
       e.request.url.indexOf('google') !== -1 ||
       parsedUrl.pathname.indexOf('config.json') !== -1 ||
       e.request.url.indexOf('unpkg.com') !== -1 ||
-      e.request.url.indexOf('cartocdn.com') !== -1 ||
+      host === 'cartocdn.com' || host.endsWith('.cartocdn.com') ||
       host === 'carto.com' || host.endsWith('.carto.com')) {
     return;
   }
