@@ -6,6 +6,28 @@
   <title>Shifts — Cassie for Roseville Field App</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../css/app.css">
+  <style>
+    .canvasser-tab{padding:8px 16px;font-size:13px;font-weight:700;border:2px solid var(--border);
+      border-radius:20px;background:var(--white);color:var(--muted);cursor:pointer;font-family:'Outfit',sans-serif;}
+    .canvasser-tab.active{background:var(--gold);color:var(--black);border-color:var(--gold);}
+    .shift-status-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 9px;border-radius:8px;margin-top:6px;letter-spacing:.02em;}
+    .shift-status-badge.status-assigned{background:#e8f7ee;color:var(--green);}
+    .shift-status-badge.status-bucketed{background:#fff4e0;color:#b8791a;}
+    .shift-status-badge.status-roster-only{background:#eef2fb;color:#3b5bab;}
+    .shift-status-badge.status-unplanned{background:var(--light);color:var(--subtle);}
+    .hood-group{margin-bottom:14px;}
+    .hood-group:last-child{margin-bottom:0;}
+    .hood-group-header{display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;
+      background:var(--light);border-radius:8px;user-select:none;}
+    .hood-group-header:hover{background:#ece7d8;}
+    .hood-group-chevron{font-size:11px;color:var(--muted);width:10px;flex-shrink:0;text-align:center;}
+    .hood-group-name{font-size:13px;font-weight:700;flex:1;}
+    .hood-group-count{font-size:11px;font-weight:700;color:var(--subtle);background:var(--white);
+      border:1px solid var(--border);border-radius:10px;padding:1px 9px;}
+    .hood-group-body{padding-top:8px;display:flex;flex-direction:column;gap:8px;}
+    .shift-subsection{margin-bottom:22px;}
+    .shift-subsection:last-child{margin-bottom:0;}
+  </style>
 </head>
 <body>
 
@@ -79,16 +101,38 @@
       </div>
     </div>
 
-    <!-- Upcoming shifts -->
-    <div class="page-card">
-      <div class="page-card-title">Upcoming Shifts</div>
-      <div id="upcoming-shifts"><div style="color:var(--subtle);font-size:13px;">Loading…</div></div>
+    <!-- Current / Past toggle — the two are never shown together -->
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button class="canvasser-tab active" id="view-toggle-upcoming" onclick="setView('upcoming')">Upcoming</button>
+      <button class="canvasser-tab" id="view-toggle-past" onclick="setView('past')">Past</button>
     </div>
 
-    <!-- Past shifts -->
-    <div class="page-card">
-      <div class="page-card-title">Past Shifts</div>
-      <div id="past-shifts"><div style="color:var(--subtle);font-size:13px;">Loading…</div></div>
+    <!-- Upcoming view -->
+    <div id="view-upcoming">
+      <div class="page-card">
+        <div class="shift-subsection">
+          <div class="section-label">Scheduled <span id="upcoming-scheduled-count"></span></div>
+          <div id="upcoming-scheduled-groups"><div style="color:var(--subtle);font-size:13px;">Loading…</div></div>
+        </div>
+        <div class="shift-subsection">
+          <div class="section-label">No Specific Date <span id="upcoming-anytime-count"></span></div>
+          <div id="upcoming-anytime-groups"><div style="color:var(--subtle);font-size:13px;">Loading…</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Past view -->
+    <div id="view-past" style="display:none;">
+      <div class="page-card">
+        <div class="shift-subsection">
+          <div class="section-label">Scheduled <span id="past-scheduled-count"></span></div>
+          <div id="past-scheduled-groups"><div style="color:var(--subtle);font-size:13px;">Loading…</div></div>
+        </div>
+        <div class="shift-subsection">
+          <div class="section-label">No Specific Date <span id="past-anytime-count"></span></div>
+          <div id="past-anytime-groups"><div style="color:var(--subtle);font-size:13px;">Loading…</div></div>
+        </div>
+      </div>
     </div>
 
   </main>
@@ -106,6 +150,18 @@ var roster = {};
 var canvassDays = {};
 var today = (function(){var _d=new Date();return _d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');})();
 
+// Per-shift planning data, keyed by '<hoodKey>|<date>' — filled in by
+// loadPlanningStatus() before the first render so every shift card can show
+// whether it's actually assigned yet, not just whether a canvass-day record
+// exists.
+var bucketsByPath = {};
+var assignmentsByPath = {};
+
+// Which neighborhood groups are collapsed, and which top-level view (Upcoming
+// vs Past) is showing, persist in localStorage — this is the admin's own
+// browser, so it's a fine place to remember their layout between visits.
+var groupRegistry = {};
+
 initAuth(
   function(user) { loadShifts(); },
   function(user) { window.location.href = '/field-app/canvass.html'; }
@@ -116,6 +172,11 @@ function loadShifts() {
   Promise.all([fbGet('/roster'), fbGet('/canvass-days')]).then(function(r) {
     roster = r[0] || {};
     canvassDays = r[1] || {};
+    return loadPlanningStatus();
+  }).then(function() {
+    var savedView = 'upcoming';
+    try { savedView = localStorage.getItem('c4rShiftsView') || 'upcoming'; } catch(e) {}
+    setView(savedView);
     renderShifts();
     buildNewForm();
     // Auto-open new form if ?new=1
@@ -123,7 +184,45 @@ function loadShifts() {
   });
 }
 
+// Fetches, once, every neighborhood/date's buckets and real route
+// assignments the current set of shifts could possibly reference, so
+// computeShiftStatus() below can run synchronously against local data.
+function loadPlanningStatus() {
+  var days = Object.entries(canvassDays);
+  var pathSet = {};
+  days.forEach(function(pair) {
+    var date = pair[0], day = pair[1];
+    var hoods = day.neighborhoods || (day.neighborhood ? [day.neighborhood] : []);
+    hoods.forEach(function(hoodKey) { pathSet[hoodKey+'|'+date] = true; });
+  });
+  var keys = Object.keys(pathSet);
+  if (!keys.length) return Promise.resolve();
+  return Promise.all(keys.map(function(key) {
+    var parts = key.split('|'), hoodKey = parts[0], date = parts[1];
+    return Promise.all([
+      fbGet('/'+hoodKey+'/buckets/'+date),
+      fbGet('/'+hoodKey+'/assignments/'+date)
+    ]).then(function(res) {
+      bucketsByPath[key] = res[0] || {};
+      assignmentsByPath[key] = res[1] || {};
+    });
+  }));
+}
+
 function volName(id) { return roster[id] ? roster[id].name : id; }
+
+// Escapes text before it's inserted into an innerHTML string, so a name,
+// note, or label containing HTML-special characters can't be misread as
+// markup.
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 function activeVols() {
   return Object.entries(roster)
@@ -147,7 +246,7 @@ function buildNewForm() {
   var vols = activeVols();
   grid.innerHTML = vols.map(function(v) {
     return '<div class="vol-check-item" data-id="'+v.id+'" onclick="this.classList.toggle(\'checked\')">' +
-      '<div class="vci-box">✓</div><div class="vci-name">'+v.name+'</div></div>';
+      '<div class="vci-box">✓</div><div class="vci-name">'+escapeHtml(v.name)+'</div></div>';
   }).join('') || '<div style="font-size:12px;color:var(--subtle);">No active volunteers — add them in Roster first.</div>';
 }
 
@@ -199,6 +298,136 @@ function saveNewShift() {
   }).catch(function(){ showToast('Save failed'); });
 }
 
+function setView(view) {
+  document.getElementById('view-upcoming').style.display = view==='upcoming' ? '' : 'none';
+  document.getElementById('view-past').style.display = view==='past' ? '' : 'none';
+  document.getElementById('view-toggle-upcoming').classList.toggle('active', view==='upcoming');
+  document.getElementById('view-toggle-past').classList.toggle('active', view==='past');
+  try { localStorage.setItem('c4rShiftsView', view); } catch(e) {}
+}
+
+function hoodDisplay(hoodKey) {
+  var hood = (window.NEIGHBORHOODS||[]).find(function(n){return n.key===hoodKey;});
+  return hood ? hood.displayName : hoodKey;
+}
+
+function hoodGroupLabel(day) {
+  var hoods = day.neighborhoods || (day.neighborhood ? [day.neighborhood] : []);
+  if (!hoods.length) return 'Unassigned Neighborhood';
+  return hoods.map(hoodDisplay).sort().join(' + ');
+}
+
+// Figures out, from real Firebase data rather than just the shift record,
+// whether this shift has actual assigned routes, only bucketed/grouped
+// addresses with nobody assigned yet, a roster picked but no route at all,
+// or nothing planned yet.
+function computeShiftStatus(date, day) {
+  var hoods = day.neighborhoods || (day.neighborhood ? [day.neighborhood] : []);
+  var hasBuckets = false;
+  var assignedIds = {};
+  hoods.forEach(function(hoodKey) {
+    var key = hoodKey+'|'+date;
+    var buckets = bucketsByPath[key] || {};
+    Object.keys(buckets).forEach(function(bid) {
+      var b = buckets[bid] || {};
+      if ((b.route||[]).length) hasBuckets = true;
+    });
+    var assignments = assignmentsByPath[key] || {};
+    Object.keys(assignments).forEach(function(volId) {
+      var a = assignments[volId];
+      if (a && (a.route||[]).length) assignedIds[volId] = true;
+    });
+  });
+  var assignedList = Object.keys(assignedIds);
+  var rosterVols = day.volunteers || [];
+  var allVolIds = rosterVols.slice();
+  assignedList.forEach(function(id){ if (allVolIds.indexOf(id)===-1) allVolIds.push(id); });
+
+  var label, cls;
+  if (assignedList.length) { label = 'Assigned'; cls = 'assigned'; }
+  else if (hasBuckets) { label = 'Bucketed — No Roster'; cls = 'bucketed'; }
+  else if (rosterVols.length) { label = 'Roster Set — No Route'; cls = 'roster-only'; }
+  else { label = 'Not Planned'; cls = 'unplanned'; }
+
+  return { label: label, cls: cls, vols: allVolIds };
+}
+
+function groupByHood(list) {
+  var map = {};
+  list.forEach(function(pair) {
+    var label = hoodGroupLabel(pair[1]);
+    if (!map[label]) map[label] = [];
+    map[label].push(pair);
+  });
+  return Object.keys(map).sort().map(function(label){ return {label:label, items:map[label]}; });
+}
+
+function collapseKey(sectionId, label) { return 'c4rShiftCollapse_'+sectionId+'_'+label; }
+function isCollapsed(sectionId, label) {
+  try { return localStorage.getItem(collapseKey(sectionId,label)) === '1'; } catch(e) { return false; }
+}
+
+function renderGroupSection(containerEl, sectionId, list) {
+  var groups = groupByHood(list);
+  groupRegistry[sectionId] = groups;
+  if (!groups.length) {
+    containerEl.innerHTML = '<div style="color:var(--subtle);font-size:13px;">Nothing here.</div>';
+    return;
+  }
+  containerEl.innerHTML = groups.map(function(g, idx) {
+    var collapsed = isCollapsed(sectionId, g.label);
+    var bodyId = sectionId+'-group-'+idx;
+    return '<div class="hood-group">'
+      + '<div class="hood-group-header" onclick="toggleHoodGroup(\''+sectionId+'\','+idx+')">'
+        + '<span class="hood-group-chevron" id="'+bodyId+'-chevron">'+(collapsed?'▸':'▾')+'</span>'
+        + '<span class="hood-group-name">'+escapeHtml(g.label)+'</span>'
+        + '<span class="hood-group-count">'+g.items.length+'</span>'
+      + '</div>'
+      + '<div class="hood-group-body" id="'+bodyId+'" style="'+(collapsed?'display:none;':'')+'">'
+        + g.items.map(function(pair){ return card(pair); }).join('')
+      + '</div>'
+    + '</div>';
+  }).join('');
+}
+
+function toggleHoodGroup(sectionId, idx) {
+  var groups = groupRegistry[sectionId];
+  if (!groups || !groups[idx]) return;
+  var label = groups[idx].label;
+  var bodyId = sectionId+'-group-'+idx;
+  var body = document.getElementById(bodyId);
+  var chevron = document.getElementById(bodyId+'-chevron');
+  var wasCollapsed = body.style.display === 'none';
+  body.style.display = wasCollapsed ? '' : 'none';
+  chevron.textContent = wasCollapsed ? '▾' : '▸';
+  try { localStorage.setItem(collapseKey(sectionId,label), wasCollapsed?'0':'1'); } catch(e) {}
+}
+
+function card(pair) {
+  var date=pair[0], day=pair[1];
+  var isAnytime = date.indexOf('anytime') === 0;
+  var status = computeShiftStatus(date, day);
+  var hoods = day.neighborhoods || (day.neighborhood ? [day.neighborhood] : []);
+  var hoodName = hoods.map(hoodDisplay).join(' + ');
+  var vols = status.vols.map(volName);
+  var badgeHtml = isAnytime
+    ? '<div class="shift-date-badge" style="background:var(--gold);"><div class="day" style="font-size:9px;line-height:1.1;">ANY</div><div class="month">TIME</div></div>'
+    : (function(){ var d = new Date(date+'T12:00:00'); return '<div class="shift-date-badge"><div class="day">'+d.getDate()+'</div><div class="month">'+d.toLocaleDateString('en-US',{month:'short'})+'</div></div>'; })();
+  return '<div class="shift-item">' +
+    badgeHtml +
+    '<div class="shift-info">' +
+      '<div class="shift-hood">'+escapeHtml(hoodName)+(day.notes?' · '+escapeHtml(day.notes):'')+(day.closed?' <span style="color:var(--red);font-size:11px;font-weight:700;">&middot; CLOSED</span>':'')+'</div>' +
+      '<div class="shift-meta">'+formatDate(date)+'</div>' +
+      '<div class="shift-status-badge status-'+status.cls+'">'+status.label+'</div>' +
+      (vols.length?'<div class="shift-vols">'+vols.map(function(n){return '<span class="shift-vol-pill">'+escapeHtml(n)+'</span>';}).join('')+'</div>':'') +
+    '</div>' +
+    '<div class="shift-actions">' +
+      '<a href="/field-app/admin/shift.html?date='+encodeURIComponent(date)+'" class="btn btn-ghost btn-sm">View / Edit</a>' +
+      '<button class="btn btn-danger btn-sm" data-date="'+date+'" onclick="deleteShift(this.dataset.date)">Delete</button>' +
+    '</div>' +
+  '</div>';
+}
+
 function renderShifts() {
   var days = Object.entries(canvassDays).sort(function(a,b){ return a[0].localeCompare(b[0]); });
   // A closed shift (route explicitly marked done, mainly for Anytime
@@ -207,34 +436,20 @@ function renderShifts() {
   var upcoming = days.filter(function(p){ return p[0]>=today && !p[1].closed; });
   var past = days.filter(function(p){ return p[0]<today || p[1].closed; }).reverse();
 
-  function card(pair) {
-    var date=pair[0], day=pair[1];
-    var isAnytime = date.indexOf('anytime') === 0;
-    var hood = (window.NEIGHBORHOODS||[]).find(function(n){return n.key===day.neighborhood;});
-    var hoodName = hood ? hood.displayName : (day.neighborhood||'');
-    var vols = (day.volunteers||[]).map(volName);
-    var badgeHtml = isAnytime
-      ? '<div class="shift-date-badge" style="background:var(--gold);"><div class="day" style="font-size:9px;line-height:1.1;">ANY</div><div class="month">TIME</div></div>'
-      : (function(){ var d = new Date(date+'T12:00:00'); return '<div class="shift-date-badge"><div class="day">'+d.getDate()+'</div><div class="month">'+d.toLocaleDateString('en-US',{month:'short'})+'</div></div>'; })();
-    return '<div class="shift-item">' +
-      badgeHtml +
-      '<div class="shift-info">' +
-        '<div class="shift-hood">'+hoodName+(day.notes?' · '+day.notes:'')+(day.closed?' <span style="color:var(--red,#c0392b);font-size:11px;font-weight:700;">&middot; CLOSED</span>':'')+'</div>' +
-        '<div class="shift-meta">'+formatDate(date)+'</div>' +
-        (vols.length?'<div class="shift-vols">'+vols.map(function(n){return '<span class="shift-vol-pill">'+n+'</span>';}).join('')+'</div>':'') +
-      '</div>' +
-      '<div class="shift-actions">' +
-        '<a href="/field-app/admin/shift.html?date='+date+'" class="btn btn-ghost btn-sm">View / Edit</a>' +
-        '<button class="btn btn-danger btn-sm" data-date="'+date+'" onclick="deleteShift(this.dataset.date)">Delete</button>' +
-      '</div>' +
-    '</div>';
-  }
+  var upScheduled = upcoming.filter(function(p){ return p[0].indexOf('anytime')!==0; });
+  var upAnytime = upcoming.filter(function(p){ return p[0].indexOf('anytime')===0; });
+  var pastScheduled = past.filter(function(p){ return p[0].indexOf('anytime')!==0; });
+  var pastAnytime = past.filter(function(p){ return p[0].indexOf('anytime')===0; });
 
-  var upEl = document.getElementById('upcoming-shifts');
-  upEl.innerHTML = upcoming.length ? upcoming.map(card).join('') : '<div style="color:var(--subtle);font-size:13px;">No upcoming shifts.</div>';
+  renderGroupSection(document.getElementById('upcoming-scheduled-groups'), 'up-sched', upScheduled);
+  renderGroupSection(document.getElementById('upcoming-anytime-groups'), 'up-any', upAnytime);
+  renderGroupSection(document.getElementById('past-scheduled-groups'), 'past-sched', pastScheduled);
+  renderGroupSection(document.getElementById('past-anytime-groups'), 'past-any', pastAnytime);
 
-  var pastEl = document.getElementById('past-shifts');
-  pastEl.innerHTML = past.length ? past.map(function(p){ return card(p); }).join('') : '<div style="color:var(--subtle);font-size:13px;">No past shifts yet.</div>';
+  document.getElementById('upcoming-scheduled-count').textContent = upScheduled.length ? '('+upScheduled.length+')' : '';
+  document.getElementById('upcoming-anytime-count').textContent = upAnytime.length ? '('+upAnytime.length+')' : '';
+  document.getElementById('past-scheduled-count').textContent = pastScheduled.length ? '('+pastScheduled.length+')' : '';
+  document.getElementById('past-anytime-count').textContent = pastAnytime.length ? '('+pastAnytime.length+')' : '';
 }
 
 function deleteShift(date) {
