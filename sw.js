@@ -40,7 +40,7 @@ self.addEventListener('fetch', function(e) {
   if (e.request.url.indexOf('firebase') !== -1 ||
       e.request.url.indexOf('google') !== -1 ||
       parsedUrl.pathname.indexOf('config.json') !== -1 ||
-      e.request.url.indexOf('unpkg.com') !== -1 ||
+      host === 'unpkg.com' || host.endsWith('.unpkg.com') ||
       host === 'cartocdn.com' || host.endsWith('.cartocdn.com') ||
       host === 'carto.com' || host.endsWith('.carto.com')) {
     return;
