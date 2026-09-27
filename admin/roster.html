@@ -61,6 +61,16 @@
           <input class="form-input" id="add-email" type="email" placeholder="their@gmail.com">
         </div>
       </div>
+      <div class="form-group">
+        <label class="form-label">Firebase Auth UID <span style="color:var(--red)">*</span></label>
+        <input class="form-input" id="add-uid" type="text" placeholder="e.g. aB3xQz9...">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">
+          Create their sign-in account first in Firebase Console → Authentication → Users,
+          then copy the "User UID" column value here. This has to be their real UID — the
+          security rules check for a roster entry keyed exactly by it, so anything else
+          leaves them unable to read their shifts or roster info once signed in.
+        </div>
+      </div>
       <div style="display:flex;gap:8px;margin-top:4px;">
         <button class="btn btn-gold" onclick="addVolunteer()">Add</button>
         <button class="btn btn-ghost" onclick="toggleAddForm()">Cancel</button>
@@ -97,6 +107,19 @@ initAuth(
   function(user) { window.location.href = '/field-app/canvass.html'; }
 );
 
+// Escapes text before it's inserted into an innerHTML string, so a name or
+// email containing HTML-special characters (< > & " ') can't be misread as
+// markup or break out of an attribute value.
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function loadRoster() {
   setFbBase();
   fbGet('/roster').then(function(d) {
@@ -116,14 +139,14 @@ function renderRoster() {
     var id=pair[0], v=pair[1];
     return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">' +
       (editingId===id ?
-        '<input class="form-input" id="edit-name-'+id+'" value="'+v.name+'" style="flex:1;max-width:200px;">' +
-        '<input class="form-input" id="edit-email-'+id+'" value="'+(v.email||'')+'" placeholder="Email" style="flex:1;max-width:220px;">' +
+        '<input class="form-input" id="edit-name-'+id+'" value="'+escapeHtml(v.name)+'" style="flex:1;max-width:200px;">' +
+        '<input class="form-input" id="edit-email-'+id+'" value="'+escapeHtml(v.email||'')+'" placeholder="Email" style="flex:1;max-width:220px;">' +
         '<button class="btn btn-gold btn-sm" data-vid="'+id+'" onclick="saveEdit(this.dataset.vid)">Save</button>' +
         '<button class="btn btn-ghost btn-sm" onclick="cancelEdit()">Cancel</button>'
         :
         '<div style="flex:1;min-width:0;">' +
-          '<div style="font-size:13px;font-weight:700;">'+v.name+'</div>' +
-          '<div style="font-size:11px;color:var(--muted);">'+(v.email||'No email')+'</div>' +
+          '<div style="font-size:13px;font-weight:700;">'+escapeHtml(v.name)+'</div>' +
+          '<div style="font-size:11px;color:var(--muted);">'+escapeHtml(v.email||'No email')+'</div>' +
         '</div>' +
         '<button class="btn btn-ghost btn-sm" data-vid="'+id+'" onclick="startEdit(this.dataset.vid)">Edit</button>' +
         (isActive ?
@@ -154,6 +177,7 @@ function toggleAddForm() {
   if (f.style.display === 'block') {
     document.getElementById('add-name').value = '';
     document.getElementById('add-email').value = '';
+    document.getElementById('add-uid').value = '';
     document.getElementById('add-name').focus();
   }
 }
@@ -161,8 +185,16 @@ function toggleAddForm() {
 function addVolunteer() {
   var name = document.getElementById('add-name').value.trim();
   var email = document.getElementById('add-email').value.trim().toLowerCase();
+  var id = document.getElementById('add-uid').value.trim();
   if (!name) { showToast('Name is required'); return; }
-  var id = genId();
+  // The roster entry's KEY has to be the person's real Firebase Auth UID —
+  // the security rules check root.child('roster').child(auth.uid).exists(),
+  // so a random/auto-generated key here would leave this person unable to
+  // read anything (roster, their shifts, assignments, logs) once signed in,
+  // even though sign-in itself would succeed. See field-app.md for the full
+  // story on why this has to be the real UID.
+  if (!id) { showToast('Firebase Auth UID is required'); return; }
+  if (roster[id]) { showToast('A roster entry already exists for that UID'); return; }
   roster[id] = { name:name, email:email, status:'active', added:new Date().toISOString() };
   fbPut('/roster/'+id, roster[id]).then(function() {
     toggleAddForm();
