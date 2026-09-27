@@ -197,6 +197,11 @@ function friendlyError(code) {
     'auth/too-many-requests': 'Too many attempts — try again later.',
     'auth/network-request-failed': 'Network error — check your connection.',
     'auth/popup-blocked': 'Popup blocked — allow popups for this site.',
+    'auth/user-disabled': 'This account has been disabled.',
+    'auth/operation-not-allowed': 'Email/password sign-in is turned off for this app.',
   };
-  return map[code] || 'Sign-in failed — try again.';
+  // Any code not in the map above still gets shown, rather than hidden
+  // behind a generic message — a code we haven't seen before is exactly
+  // the thing worth knowing when diagnosing a sign-in problem.
+  return map[code] || ('Sign-in failed (' + (code || 'unknown error') + ') — try again.');
 }
