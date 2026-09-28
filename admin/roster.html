@@ -151,7 +151,8 @@ function renderRoster() {
         '<button class="btn btn-ghost btn-sm" data-vid="'+id+'" onclick="startEdit(this.dataset.vid)">Edit</button>' +
         (isActive ?
           '<button class="btn btn-danger btn-sm" data-vid="'+id+'" onclick="setStatus(this.dataset.vid,\'inactive\')">Deactivate</button>' :
-          '<button class="btn btn-ghost btn-sm" data-vid="'+id+'" onclick="setStatus(this.dataset.vid,\'active\')">Reactivate</button>'
+          '<button class="btn btn-ghost btn-sm" data-vid="'+id+'" onclick="setStatus(this.dataset.vid,\'active\')">Reactivate</button>' +
+          '<button class="btn btn-danger btn-sm" data-vid="'+id+'" onclick="deleteVolunteer(this.dataset.vid)">Delete</button>'
         )
       ) +
     '</div>';
@@ -224,6 +225,27 @@ function setStatus(id, status) {
   fbPatch('/roster/'+id, {status:status}).then(function() {
     renderRoster(); showToast(name + (status==='active'?' reactivated':' deactivated'));
   }).catch(function(){ showToast('Save failed'); });
+}
+
+function deleteVolunteer(id) {
+  var v = roster[id] || {};
+  var name = v.name || id;
+  // Only offered from the Inactive list — an active volunteer has to be
+  // deactivated first, so this is never one accidental click away from
+  // removing someone who's currently on the schedule.
+  if (!confirm(
+    'Permanently delete ' + name + ' from the roster?\n\n' +
+    'This cannot be undone. If this person has past shift logs or ' +
+    'assignments on record, those will show a raw ID instead of their ' +
+    'name once this entry is gone — deleting is meant for old test ' +
+    'entries or duplicates, not people with real history you still want ' +
+    'to read.'
+  )) return;
+  fbPut('/roster/'+id, null).then(function() {
+    delete roster[id];
+    renderRoster();
+    showToast(name + ' deleted');
+  }).catch(function(){ showToast('Delete failed'); });
 }
 
 var _tt;

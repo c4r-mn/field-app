@@ -213,6 +213,7 @@
             <label class="form-label">Shift Date</label>
             <input class="form-input" id="edit-date" type="date">
             <div style="font-size:11px;color:var(--muted);margin-top:4px;">Changing this moves all assignments and buckets planned for this shift to the new date.</div>
+            <button class="btn btn-ghost btn-sm" id="make-anytime-btn" style="margin-top:8px;" onclick="convertToAnytime()">Move to No Specific Date</button>
           </div>
           <div class="form-group">
             <label class="form-label">Neighborhood(s)</label>
@@ -1100,7 +1101,12 @@ function buildDangerZone() {
   var canReschedule = !isPastShift || !hasRealLogs;
   if (canReschedule) {
     dateGroup.style.display = 'block';
-    document.getElementById('edit-date').value = (shiftDate.indexOf('anytime') === 0) ? '' : shiftDate;
+    var isAnytimeNow = shiftDate.indexOf('anytime') === 0;
+    document.getElementById('edit-date').value = isAnytimeNow ? '' : shiftDate;
+    var anytimeBtn = document.getElementById('make-anytime-btn');
+    // Already a no-date shift — nothing to convert. Picking a real date in
+    // the field above and saving already moves it the other direction.
+    anytimeBtn.style.display = isAnytimeNow ? 'none' : 'inline-block';
     var hint = dateGroup.querySelector('.reschedule-hint');
     if (isPastShift && !hasRealLogs) {
       if (!hint) {
@@ -1187,6 +1193,20 @@ function saveShiftEdits() {
     buildCanvasserSelect();
     showToast('Shift details saved');
   }).catch(function(){showToast('Save failed');});
+}
+
+function convertToAnytime() {
+  var notes = document.getElementById('edit-notes').value.trim();
+  var vols = Array.from(document.querySelectorAll('#edit-vol-grid .vol-check-item.checked')).map(function(el){return el.dataset.id;});
+  var newHoods = Array.from(document.querySelectorAll('#edit-hood-grid .hood-check-item.checked')).map(function(el){return el.dataset.key;});
+  if (!newHoods.length) { showToast('Select at least one neighborhood'); return; }
+  shiftHoods = newHoods;
+  shiftData.neighborhoods = newHoods;
+  shiftData.neighborhood = newHoods[0];
+  // Same unique-key scheme used when a no-date shift is created fresh from
+  // the Shifts tab (anytime-<timestamp>) — rescheduleShift() below already
+  // knows how to move assignments/logs/buckets to any new key, dated or not.
+  rescheduleShift('anytime-' + Date.now(), notes, vols);
 }
 
 function rescheduleShift(newDate, notes, vols) {
