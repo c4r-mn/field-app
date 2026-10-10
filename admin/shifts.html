@@ -121,16 +121,14 @@
       </div>
     </div>
 
-    <!-- Past view -->
+    <!-- Past view — scheduled and no-specific-date shifts mixed together;
+         each shift's own card already shows a date or an ANY/TIME badge, so
+         there's no need to split them into separate sections here. -->
     <div id="view-past" style="display:none;">
       <div class="page-card">
         <div class="shift-subsection">
-          <div class="section-label">Scheduled <span id="past-scheduled-count"></span></div>
-          <div id="past-scheduled-groups"><div style="color:var(--subtle);font-size:13px;">Loading…</div></div>
-        </div>
-        <div class="shift-subsection">
-          <div class="section-label">No Specific Date <span id="past-anytime-count"></span></div>
-          <div id="past-anytime-groups"><div style="color:var(--subtle);font-size:13px;">Loading…</div></div>
+          <div class="section-label">Past <span id="past-count"></span></div>
+          <div id="past-groups"><div style="color:var(--subtle);font-size:13px;">Loading…</div></div>
         </div>
       </div>
     </div>
@@ -438,18 +436,14 @@ function renderShifts() {
 
   var upScheduled = upcoming.filter(function(p){ return p[0].indexOf('anytime')!==0; });
   var upAnytime = upcoming.filter(function(p){ return p[0].indexOf('anytime')===0; });
-  var pastScheduled = past.filter(function(p){ return p[0].indexOf('anytime')!==0; });
-  var pastAnytime = past.filter(function(p){ return p[0].indexOf('anytime')===0; });
 
   renderGroupSection(document.getElementById('upcoming-scheduled-groups'), 'up-sched', upScheduled);
   renderGroupSection(document.getElementById('upcoming-anytime-groups'), 'up-any', upAnytime);
-  renderGroupSection(document.getElementById('past-scheduled-groups'), 'past-sched', pastScheduled);
-  renderGroupSection(document.getElementById('past-anytime-groups'), 'past-any', pastAnytime);
+  renderGroupSection(document.getElementById('past-groups'), 'past', past);
 
   document.getElementById('upcoming-scheduled-count').textContent = upScheduled.length ? '('+upScheduled.length+')' : '';
   document.getElementById('upcoming-anytime-count').textContent = upAnytime.length ? '('+upAnytime.length+')' : '';
-  document.getElementById('past-scheduled-count').textContent = pastScheduled.length ? '('+pastScheduled.length+')' : '';
-  document.getElementById('past-anytime-count').textContent = pastAnytime.length ? '('+pastAnytime.length+')' : '';
+  document.getElementById('past-count').textContent = past.length ? '('+past.length+')' : '';
 }
 
 function deleteShift(date) {
