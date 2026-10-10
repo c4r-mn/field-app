@@ -202,7 +202,7 @@ function initDashMap() {
   }).addTo(dashMap);
 
   var COLORS = {'Not Home':'#64748b','Vacant':'#475569','For Sale':'#7c3aed',
-    'No Soliciting':'#92400e','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb'};
+    'No Soliciting':'#92400e','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb','Skipped':'#ca8a04'};
 
   (window.NEIGHBORHOODS||[]).forEach(function(n) {
     Promise.all([
