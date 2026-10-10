@@ -1307,10 +1307,14 @@ function buildSetupSelects() {
       var o=document.createElement('option');
       o.value=date;
       var day=canvassDays[date];
-      var label=formatDate(date)+(date===today?' (today)':'');
+      // A second/third shift on the same date (date__2, date__3...) is still
+      // "today" for labeling purposes — baseShiftDate() strips the suffix so
+      // every shift on today's date gets tagged, not just the first one.
+      var isToday=baseShiftDate(date)===today;
+      var label=formatDate(date)+(isToday?' (today)':'');
       if(day&&day.notes) label+=' · '+day.notes;
       o.textContent=label;
-      if(date===today) o.selected=true;
+      if(isToday) o.selected=true;
       ds.appendChild(o);
     });
   }
