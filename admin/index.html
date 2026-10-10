@@ -125,8 +125,13 @@ function volName(id) {
 }
 
 function renderShifts() {
+  // A "no specific date" shift's key is "anytime-<timestamp>", which always
+  // sorts >= any real YYYY-MM-DD date string — that's intentional (an
+  // anytime shift has no date to expire), but it means a CLOSED anytime
+  // shift still passed this filter forever unless .closed is excluded too.
+  // Matches the same upcoming/past split shifts.html already uses.
   var upcoming = Object.entries(canvassDays)
-    .filter(function(p){ return p[0] >= today; })
+    .filter(function(p){ return p[0] >= today && !p[1].closed; })
     .sort(function(a,b){ return a[0].localeCompare(b[0]); })
     .slice(0, 5);
 
@@ -141,11 +146,12 @@ function renderShifts() {
     var hood = (window.NEIGHBORHOODS||[]).find(function(n){return n.key===day.neighborhood;});
     var hoodName = hood ? hood.displayName : (day.neighborhood||'');
     var vols = (day.volunteers||[]).map(volName);
-    var d = new Date(date+'T12:00:00');
-    var dayNum = d.getDate();
-    var mon = d.toLocaleDateString('en-US',{month:'short'});
+    var isAnytime = date.indexOf('anytime') === 0;
+    var badgeHtml = isAnytime
+      ? '<div class="shift-date-badge" style="background:var(--gold);"><div class="day" style="font-size:9px;line-height:1.1;">ANY</div><div class="month">TIME</div></div>'
+      : (function(){ var d = new Date(date+'T12:00:00'); return '<div class="shift-date-badge"><div class="day">'+d.getDate()+'</div><div class="month">'+d.toLocaleDateString('en-US',{month:'short'})+'</div></div>'; })();
     return '<div class="shift-item" style="cursor:pointer;" onclick="location.href=\'/field-app/admin/shift.html?date='+date+'\'">' +
-      '<div class="shift-date-badge"><div class="day">'+dayNum+'</div><div class="month">'+mon+'</div></div>' +
+      badgeHtml +
       '<div class="shift-info">' +
         '<div class="shift-hood">'+hoodName+(day.notes?' · '+day.notes:'')+'</div>' +
         '<div class="shift-meta">'+formatDate(date)+'</div>' +
