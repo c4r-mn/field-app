@@ -9,6 +9,7 @@ var PROP_META = {
   condo:        { label:'Condo',               color:'#0891b2', callout:null },
   apartment:    { label:'Apartment',           color:'#2563eb', callout:{cls:'apartment',icon:'🏢',text:'Apartment building — coordinate with management before knocking.'} },
   senior:       { label:'55+ Community',       color:'#d97706', callout:{cls:'senior',icon:'🏛',text:'55+ community — call residents or management before visiting.'} },
+  'senior-apartment': { label:'Senior Apartments', color:'#b45309', callout:{cls:'senior',icon:'🏛',text:'55+ apartment complex — coordinate with management before visiting.'} },
   mobile:       { label:'Mobile Home Park',    color:'#7c3aed', callout:{cls:'mobile',icon:'🏘',text:'Mobile home park — coordinate with park management first.'} },
   assisted:     { label:'Assisted Living',     color:'#e67e22', callout:{cls:'assisted',icon:'🏥',text:'Assisted living — call before any visit.'} },
   'skilled-nursing': { label:'Skilled Nursing', color:'#dc2626', callout:{cls:'nursing',icon:'🏥',text:'Skilled nursing facility — call before any visit.'} },
