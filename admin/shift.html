@@ -281,7 +281,7 @@ var PROP_META = {
 };
 var RESULT_COLORS = {
   'Not Home':'#64748b','Vacant':'#94a3b8','For Sale':'#7c3aed',
-  'No Soliciting':'#92400e','No Access':'#78716c','Dog Present':'#ea580c','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb'
+  'No Soliciting':'#92400e','No Access':'#78716c','Dog Present':'#ea580c','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb','Skipped':'#ca8a04'
 };
 
 initAuth(
@@ -795,6 +795,7 @@ function renderStats() {
   var nosolic = logs.filter(function(l){return l.contact==='No Soliciting';}).length;
   var noaccess = logs.filter(function(l){return l.contact==='No Access';}).length;
   var dogpresent = logs.filter(function(l){return l.contact==='Dog Present';}).length;
+  var skipped = logs.filter(function(l){return l.contact==='Skipped';}).length;
   document.getElementById('cv-stats').innerHTML =
     statCard(logs.length,'Total Doors Logged (all-time, this shift)')+
     statCard(adminRoute.length,'Currently Assigned')+
@@ -804,6 +805,7 @@ function renderStats() {
     statCard(nosolic,'No Soliciting','#c0392b')+
     statCard(noaccess,'No Access','#78716c')+
     statCard(dogpresent,'Dog Present','#ea580c')+
+    (skipped ? statCard(skipped,'Skipped','#ca8a04') : '')+
     (eventLogs.length ? statCard(eventLogs.length,'Meet & Greet','#D4A832') : '');
 }
 function statCard(n,label,color){
@@ -983,7 +985,7 @@ function renderAddrList() {
   }
 
   // Past shift: editable results list
-  var CONTACTS = ['Not Home','Vacant','For Sale','No Soliciting','No Access','Dog Present','Refused','Accepted','Other Language'];
+  var CONTACTS = ['Not Home','Vacant','For Sale','No Soliciting','No Access','Dog Present','Refused','Accepted','Other Language','Skipped'];
   var volLogs = allLogs[currentCanvasserId]||{};
 
   if (!adminRoute.length && !Object.keys(volLogs).length) {
@@ -1347,7 +1349,7 @@ function printWalkSheet() {
       +'<td class="num">'+(i+1)+'</td>'
       +'<td class="addr"><strong>'+addr.n+'</strong> '+addr.s+(addr.u?' &middot; <span style="font-weight:400;color:#6b6860;">'+addr.u+'</span>':'')
         +(meta?'<div style="font-size:7.5pt;color:#d97706;font-weight:600;">'+meta+'</div>':'')+'</td>'
-      +'<td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td>'
+      +'<td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td>'
       +'<td class="notes"></td></tr>';
   }).join('');
 
@@ -1382,7 +1384,7 @@ function printWalkSheet() {
     +'<div class="hdr-r"><div class="cnt">'+sorted.length+'</div><div class="lbl">Addresses</div></div></div>'
     +'<div id="walk-map"></div>'
     +'<div class="wm-cap">Route map &middot; numbers correspond to list below</div>'
-    +'<table><thead><tr><th></th><th class="al">Address</th><th>Not Home</th><th>Vacant</th><th>For Sale</th><th>No Solic.</th><th>No Access</th><th>Dog</th><th>Refused</th><th>Accepted</th><th>Other</th><th style="text-align:left;padding-left:6px;">Notes / Contact / Sign</th></tr></thead>'
+    +'<table><thead><tr><th></th><th class="al">Address</th><th>Not Home</th><th>Vacant</th><th>For Sale</th><th>No Solic.</th><th>No Access</th><th>Dog</th><th>Refused</th><th>Accepted</th><th>Other</th><th>Skipped</th><th style="text-align:left;padding-left:6px;">Notes / Contact / Sign</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table>'
     +'<div class="footer"><span>Cassie Iverson for Roseville City Council 2026 &middot; cassie4roseville.com</span><span>Printed '+new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</span></div>'
     +'</div>'
