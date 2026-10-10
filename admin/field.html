@@ -114,6 +114,7 @@
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#92400e;margin-right:4px;"></span>No Soliciting</span>
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#78716c;margin-right:4px;"></span>No Access</span>
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ea580c;margin-right:4px;"></span>Dog Present</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ca8a04;margin-right:4px;"></span>Skipped</span>
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#e0ddd3;border:1px solid #aaa;margin-right:4px;"></span>Not Knocked</span>
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#D4A832;margin-right:4px;"></span>Upcoming</span>
       <span style="color:#D4A832;">* = Cassie to Contact</span>
@@ -152,7 +153,7 @@ var today = (function(){var _d=new Date();return _d.getFullYear()+'-'+String(_d.
 
 var RESULT_COLORS = {
   'Not Home':'#64748b','Vacant':'#94a3b8','For Sale':'#7c3aed',
-  'No Soliciting':'#92400e','No Access':'#78716c','Dog Present':'#ea580c','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb'
+  'No Soliciting':'#92400e','No Access':'#78716c','Dog Present':'#ea580c','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb','Skipped':'#ca8a04'
 };
 var PROP_META_FV = {
   house:            {label:'House',            color:'#27ae60'},
@@ -166,7 +167,7 @@ var PROP_META_FV = {
   'skilled-nursing':{label:'Skilled Nursing',  color:'#dc2626'},
   mobile:           {label:'Mobile Home Park', color:'#7c3aed'},
 };
-var CONTACT_OPTIONS = ['Not Home','Vacant','For Sale','No Soliciting','No Access','Dog Present','Refused','Accepted','Other Language'];
+var CONTACT_OPTIONS = ['Not Home','Vacant','For Sale','No Soliciting','No Access','Dog Present','Refused','Accepted','Other Language','Skipped'];
 // Which contact results are eligible to be flagged "Letter Sent" — used by the
 // bulk action, the individual edit modal, and CSV exports, so all three stay in sync.
 var LETTER_ELIGIBLE = ['No Soliciting','No Access','Dog Present'];
