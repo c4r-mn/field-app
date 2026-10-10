@@ -149,7 +149,7 @@ function renderShifts() {
     var isAnytime = date.indexOf('anytime') === 0;
     var badgeHtml = isAnytime
       ? '<div class="shift-date-badge" style="background:var(--gold);"><div class="day" style="font-size:9px;line-height:1.1;">ANY</div><div class="month">TIME</div></div>'
-      : (function(){ var d = new Date(date+'T12:00:00'); return '<div class="shift-date-badge"><div class="day">'+d.getDate()+'</div><div class="month">'+d.toLocaleDateString('en-US',{month:'short'})+'</div></div>'; })();
+      : (function(){ var d = new Date(baseShiftDate(date)+'T12:00:00'); return '<div class="shift-date-badge"><div class="day">'+d.getDate()+'</div><div class="month">'+d.toLocaleDateString('en-US',{month:'short'})+'</div></div>'; })();
     return '<div class="shift-item" style="cursor:pointer;" onclick="location.href=\'/field-app/admin/shift.html?date='+date+'\'">' +
       badgeHtml +
       '<div class="shift-info">' +
