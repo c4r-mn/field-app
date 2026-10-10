@@ -859,17 +859,32 @@ function refreshMapMarkers() {
       bounds.push([addr.lat,addr.lng]);
     });
   } else {
-    // Results mode: only show route addresses, colored by result
+    // Results mode: route addresses, plus any address the canvasser logged
+    // a result for even though it wasn't part of their planned route — the
+    // route array is what was planned, not a filter on what's allowed to
+    // have happened. Dropping those here would hide real canvassing data
+    // that's already saved in /logs.
     var addrMap = {};
     adminAddresses.forEach(function(a){addrMap[a.id]=a;});
     var volLogs = allLogs[currentCanvasserId]||{};
-    adminRoute.forEach(function(addrId,i){
+    var plannedIds = {};
+    adminRoute.forEach(function(id){ plannedIds[id] = true; });
+    var toPlot = adminRoute.map(function(id,i){ return {id:id, i:i}; });
+    var nextIdx = adminRoute.length;
+    Object.keys(volLogs).forEach(function(id){
+      if (plannedIds[id]) return;
+      toPlot.push({id:id, i:nextIdx++});
+    });
+    toPlot.forEach(function(item){
+      var addrId = item.id, i = item.i;
       var addr = addrMap[addrId]; if(!addr) return;
       var log = volLogs[addrId];
+      var offRoute = !plannedIds[addrId];
       var color = log ? (RESULT_COLORS[log.contact]||'#888') : '#D4A832';
       var label = '<span style="font-size:8px;font-weight:800;color:'+(log?'#fff':'#1d1b16')+';">'+(i+1)+'</span>';
-      var icon = L.divIcon({className:'', html:'<div style="width:20px;height:20px;background:'+color+';border-radius:50%;border:2px solid rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.3);">'+label+'</div>',iconSize:[20,20],iconAnchor:[10,10]});
+      var icon = L.divIcon({className:'', html:'<div style="width:20px;height:20px;background:'+color+';border-radius:50%;border:2px solid '+(offRoute?'#D4A832':'rgba(0,0,0,.2)')+';display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.3);">'+label+'</div>',iconSize:[20,20],iconAnchor:[10,10]});
       var popup = '<strong>'+(i+1)+'. '+addr.n+' '+addr.s+'</strong>'+(addr.u?' &middot; '+addr.u:'');
+      if (offRoute) popup += '<br><em style="color:#D4A832;">Off Route</em>';
       if (log) { popup += '<br><span style="color:'+color+';font-weight:700;">'+log.contact+'</span>'; if(log.name) popup+='<br>'+log.name; }
       var m = L.marker([addr.lat,addr.lng],{icon:icon}).bindPopup(popup).addTo(shiftMap);
       mapMarkers[addrId]=m;
@@ -968,12 +983,13 @@ function renderAddrList() {
   }
 
   // Past shift: editable results list
-  if (!adminRoute.length) {
+  var CONTACTS = ['Not Home','Vacant','For Sale','No Soliciting','No Access','Dog Present','Refused','Accepted','Other Language'];
+  var volLogs = allLogs[currentCanvasserId]||{};
+
+  if (!adminRoute.length && !Object.keys(volLogs).length) {
     listEl.innerHTML = '<div style="padding:16px;color:var(--subtle);font-size:13px;">No addresses assigned.</div>';
     return;
   }
-  var CONTACTS = ['Not Home','Vacant','For Sale','No Soliciting','No Access','Dog Present','Refused','Accepted','Other Language'];
-  var volLogs = allLogs[currentCanvasserId]||{};
 
   var expandedRoute = [];
   var seen = {};
@@ -987,15 +1003,29 @@ function renderAddrList() {
     }
   });
 
+  // A canvasser can log a result for an address that was never part of
+  // their planned route — e.g. they picked up a nearby house on their own
+  // initiative. That's real canvassing data in /logs, and it has to show up
+  // here too, not just in the raw debug panel — route membership is what
+  // was PLANNED, not the full record of what actually happened.
+  var plannedSet = Object.assign({}, seen);
+  Object.keys(volLogs).forEach(function(addrId){
+    if (seen[addrId]) return;
+    seen[addrId] = true;
+    expandedRoute.push(addrId);
+  });
+
   listEl.innerHTML = expandedRoute.map(function(addrId,i){
     var addr = addrMap[addrId]; if(!addr) return '';
     var log = volLogs[addrId];
+    var offRoute = !plannedSet[addrId];
     var resultColor = log ? (RESULT_COLORS[log.contact]||'#888') : null;
     var contactOpts = CONTACTS.map(function(c){return '<option value="'+c+'"'+(log&&log.contact===c?' selected':'')+'>'+c+'</option>';}).join('');
-    return '<div class="addr-log-row" data-addr-id="'+addrId+'">'
+    return '<div class="addr-log-row" data-addr-id="'+addrId+'"'+(offRoute?' style="border-left:3px solid #D4A832;"':'')+'>'
       +'<div style="display:flex;align-items:center;gap:8px;width:100%;margin-bottom:6px;">'
         +'<div class="addr-log-num">'+(i+1)+'.</div>'
         +'<div class="addr-log-addr">'+escapeHtml(addr.n)+' '+escapeHtml(addr.s)+(addr.u?' &middot; '+escapeHtml(addr.u):'')+'</div>'
+        +(offRoute?'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;background:#D4A83222;color:#D4A832;">Off Route</span>':'')
         +(log?'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;background:'+resultColor+'22;color:'+resultColor+';">'+escapeHtml(log.contact)+'</span>':'<span class="not-knocked">Not knocked</span>')
       +'</div>'
       +'<div style="display:flex;flex-wrap:wrap;gap:6px;width:100%;padding-left:24px;">'
