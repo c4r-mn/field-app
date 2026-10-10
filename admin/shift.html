@@ -1132,7 +1132,7 @@ function buildDangerZone() {
   if (canReschedule) {
     dateGroup.style.display = 'block';
     var isAnytimeNow = shiftDate.indexOf('anytime') === 0;
-    document.getElementById('edit-date').value = isAnytimeNow ? '' : shiftDate;
+    document.getElementById('edit-date').value = isAnytimeNow ? '' : baseShiftDate(shiftDate);
     var anytimeBtn = document.getElementById('make-anytime-btn');
     // Already a no-date shift — nothing to convert. Picking a real date in
     // the field above and saving already moves it the other direction.
@@ -1212,7 +1212,7 @@ function saveShiftEdits() {
   shiftData.neighborhoods = newHoods;
   shiftData.neighborhood = newHoods[0];
 
-  if (newDate && newDate !== shiftDate) {
+  if (newDate && newDate !== baseShiftDate(shiftDate)) {
     rescheduleShift(newDate, notes, vols);
     return;
   }
@@ -1239,28 +1239,46 @@ function convertToAnytime() {
   rescheduleShift('anytime-' + Date.now(), notes, vols);
 }
 
-function rescheduleShift(newDate, notes, vols) {
-  if (!confirm('Move this shift from '+formatDate(shiftDate)+' to '+formatDate(newDate)+'? This moves all planned routes and buckets to the new date.')) {
-    document.getElementById('edit-date').value = (shiftDate.indexOf('anytime') === 0) ? '' : shiftDate;
-    return;
+// Finds the next free "date__2", "date__3"... key for a date that's
+// already taken — same scheme shifts.html uses when creating a brand new
+// shift on an occupied date. Used here so moving a shift onto a date that
+// already has one stacks it as a second shift instead of refusing outright.
+function nextStackedShiftKey(baseDate) {
+  function tryNext(n) {
+    var candidate = baseDate + '__' + n;
+    return fbGet('/canvass-days/' + candidate).then(function(existing){
+      return existing ? tryNext(n+1) : candidate;
+    });
   }
+  return tryNext(2);
+}
+
+function rescheduleShift(newDateInput, notes, vols) {
   var hoods = shiftHoods;
   var oldDate = shiftDate;
 
-  fbGet('/canvass-days/'+newDate).then(function(existing){
-    if (existing) {
-      showToast('A shift already exists on that date — pick a different date');
-      document.getElementById('edit-date').value = oldDate;
-      return Promise.reject('exists');
-    }
+  fbGet('/canvass-days/'+newDateInput).then(function(existing){
+    var stacking = !!existing;
+    return (stacking ? nextStackedShiftKey(newDateInput) : Promise.resolve(newDateInput)).then(function(finalDate){
+      var msg = stacking
+        ? 'That date already has a shift. Add this as a second shift on '+formatDate(finalDate)+'? This moves all planned routes and buckets to the new shift — the existing one on that date is untouched.'
+        : 'Move this shift from '+formatDate(shiftDate)+' to '+formatDate(finalDate)+'? This moves all planned routes and buckets to the new date.';
+      if (!confirm(msg)) {
+        document.getElementById('edit-date').value = (shiftDate.indexOf('anytime') === 0) ? '' : baseShiftDate(shiftDate);
+        return Promise.reject('cancelled');
+      }
+      return finalDate;
+    });
+  }).then(function(newDate){
     return Promise.all(hoods.map(function(hood){
       return Promise.all([
         fbGet('/'+hood+'/assignments/'+oldDate),
         fbGet('/'+hood+'/logs/'+oldDate),
         fbGet('/'+hood+'/buckets/'+oldDate),
       ]);
-    }));
-  }).then(function(perHoodResults){
+    })).then(function(perHoodResults){ return {newDate:newDate, perHoodResults:perHoodResults}; });
+  }).then(function(res){
+    var newDate = res.newDate, perHoodResults = res.perHoodResults;
     var updatedShiftData = Object.assign({}, shiftData, {notes: notes, volunteers: vols});
     var writes = [fbPut('/canvass-days/'+newDate, updatedShiftData)];
 
@@ -1273,19 +1291,19 @@ function rescheduleShift(newDate, notes, vols) {
       if (oldBuckets) writes.push(fbPut('/'+hood+'/buckets/'+newDate, oldBuckets));
     });
 
-    return Promise.all(writes);
-  }).then(function(){
+    return Promise.all(writes).then(function(){ return newDate; });
+  }).then(function(newDate){
     var deletes = [fbPut('/canvass-days/'+oldDate, null)];
     hoods.forEach(function(hood){
       deletes.push(fbPut('/'+hood+'/assignments/'+oldDate, null));
       deletes.push(fbPut('/'+hood+'/logs/'+oldDate, null));
       deletes.push(fbPut('/'+hood+'/buckets/'+oldDate, null));
     });
-    return Promise.all(deletes);
-  }).then(function(){
+    return Promise.all(deletes).then(function(){ return newDate; });
+  }).then(function(newDate){
     window.location.href = 'shift.html?date='+newDate;
   }).catch(function(err){
-    if (err !== 'exists') showToast('Reschedule failed — please try again');
+    if (err !== 'cancelled') showToast('Reschedule failed — please try again');
   });
 }
 function deleteShift() {
