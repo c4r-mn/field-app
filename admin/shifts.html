@@ -273,26 +273,53 @@ function toggleAnytimeDate() {
   if (isAnytime) dateEl.value = '';
 }
 
+// A calendar date can hold more than one shift (e.g. a morning and an
+// afternoon shift, or two different neighborhoods run in parallel) — each
+// one needs its own /canvass-days key so their routes/buckets don't pile
+// into one shared, ever-growing numbered list. The first shift on a date
+// keeps the plain "YYYY-MM-DD" key exactly as before; a second, third, etc.
+// gets "YYYY-MM-DD__2", "YYYY-MM-DD__3"... (baseShiftDate() in firebase.js
+// strips this back off wherever the real calendar date is needed). Checks
+// the already-loaded list first and only hits Firebase directly to guard
+// against two admins creating a shift at the same moment.
+function uniqueShiftKey(baseDate) {
+  if (!canvassDays[baseDate]) return Promise.resolve(baseDate);
+  var n = 2;
+  function tryNext() {
+    var candidate = baseDate + '__' + n;
+    if (canvassDays[candidate]) { n++; return tryNext(); }
+    return fbGet('/canvass-days/' + candidate).then(function(existing) {
+      if (existing) { n++; return tryNext(); }
+      return candidate;
+    });
+  }
+  return tryNext();
+}
+
 function saveNewShift() {
   var isAnytime = document.getElementById('new-anytime').checked;
-  // Each Anytime shift gets its own unique key (anytime-<timestamp>) rather
-  // than one fixed "anytime" key, so multiple flexible shifts can coexist
-  // — different volunteers, different neighborhoods, whatever's needed.
-  var date = isAnytime ? ('anytime-' + Date.now()) : document.getElementById('new-date').value;
+  var rawDate = document.getElementById('new-date').value;
   var hoods = Array.from(document.querySelectorAll('#new-hood-grid .hood-check-item.checked')).map(function(el){ return el.dataset.key; });
   var notes = document.getElementById('new-notes').value.trim();
-  if (!isAnytime && !date) { showToast('Pick a date, or check "No specific date"'); return; }
+  if (!isAnytime && !rawDate) { showToast('Pick a date, or check "No specific date"'); return; }
   if (!hoods.length) { showToast('Pick at least one neighborhood'); return; }
   var vols = Array.from(document.querySelectorAll('#new-vol-grid .vol-check-item.checked')).map(function(el){ return el.dataset.id; });
   // neighborhoods (plural) is the real field going forward — neighborhood
   // (singular) is kept in sync as the first entry, for any older code that
   // hasn't been updated to read the array yet.
   var shiftObj = { neighborhoods:hoods, neighborhood:hoods[0], notes:notes, volunteers:vols, created:new Date().toISOString() };
-  fbPut('/canvass-days/'+date, shiftObj).then(function() {
-    showToast('Shift created — opening route planner...');
-    setTimeout(function(){
-      window.location.href = '/field-app/admin/shift.html?date=' + encodeURIComponent(date);
-    }, 500);
+
+  // Each Anytime shift already gets its own unique key (anytime-<timestamp>)
+  // — a dated shift now gets the same treatment via uniqueShiftKey() when
+  // its date is already taken, instead of silently overwriting it.
+  var keyPromise = isAnytime ? Promise.resolve('anytime-' + Date.now()) : uniqueShiftKey(rawDate);
+  keyPromise.then(function(date) {
+    return fbPut('/canvass-days/'+date, shiftObj).then(function() {
+      showToast('Shift created — opening route planner...');
+      setTimeout(function(){
+        window.location.href = '/field-app/admin/shift.html?date=' + encodeURIComponent(date);
+      }, 500);
+    });
   }).catch(function(){ showToast('Save failed'); });
 }
 
@@ -410,7 +437,7 @@ function card(pair) {
   var vols = status.vols.map(volName);
   var badgeHtml = isAnytime
     ? '<div class="shift-date-badge" style="background:var(--gold);"><div class="day" style="font-size:9px;line-height:1.1;">ANY</div><div class="month">TIME</div></div>'
-    : (function(){ var d = new Date(date+'T12:00:00'); return '<div class="shift-date-badge"><div class="day">'+d.getDate()+'</div><div class="month">'+d.toLocaleDateString('en-US',{month:'short'})+'</div></div>'; })();
+    : (function(){ var d = new Date(baseShiftDate(date)+'T12:00:00'); return '<div class="shift-date-badge"><div class="day">'+d.getDate()+'</div><div class="month">'+d.toLocaleDateString('en-US',{month:'short'})+'</div></div>'; })();
   return '<div class="shift-item">' +
     badgeHtml +
     '<div class="shift-info">' +

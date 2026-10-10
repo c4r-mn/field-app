@@ -281,7 +281,7 @@ var PROP_META = {
 };
 var RESULT_COLORS = {
   'Not Home':'#64748b','Vacant':'#94a3b8','For Sale':'#7c3aed',
-  'No Soliciting':'#92400e','No Access':'#78716c','Dog Present':'#ea580c','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb'
+  'No Soliciting':'#92400e','No Access':'#78716c','Dog Present':'#ea580c','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb','Skipped':'#ca8a04'
 };
 
 initAuth(
@@ -795,6 +795,7 @@ function renderStats() {
   var nosolic = logs.filter(function(l){return l.contact==='No Soliciting';}).length;
   var noaccess = logs.filter(function(l){return l.contact==='No Access';}).length;
   var dogpresent = logs.filter(function(l){return l.contact==='Dog Present';}).length;
+  var skipped = logs.filter(function(l){return l.contact==='Skipped';}).length;
   document.getElementById('cv-stats').innerHTML =
     statCard(logs.length,'Total Doors Logged (all-time, this shift)')+
     statCard(adminRoute.length,'Currently Assigned')+
@@ -804,6 +805,7 @@ function renderStats() {
     statCard(nosolic,'No Soliciting','#c0392b')+
     statCard(noaccess,'No Access','#78716c')+
     statCard(dogpresent,'Dog Present','#ea580c')+
+    (skipped ? statCard(skipped,'Skipped','#ca8a04') : '')+
     (eventLogs.length ? statCard(eventLogs.length,'Meet & Greet','#D4A832') : '');
 }
 function statCard(n,label,color){
@@ -983,7 +985,7 @@ function renderAddrList() {
   }
 
   // Past shift: editable results list
-  var CONTACTS = ['Not Home','Vacant','For Sale','No Soliciting','No Access','Dog Present','Refused','Accepted','Other Language'];
+  var CONTACTS = ['Not Home','Vacant','For Sale','No Soliciting','No Access','Dog Present','Refused','Accepted','Other Language','Skipped'];
   var volLogs = allLogs[currentCanvasserId]||{};
 
   if (!adminRoute.length && !Object.keys(volLogs).length) {
@@ -1132,7 +1134,7 @@ function buildDangerZone() {
   if (canReschedule) {
     dateGroup.style.display = 'block';
     var isAnytimeNow = shiftDate.indexOf('anytime') === 0;
-    document.getElementById('edit-date').value = isAnytimeNow ? '' : shiftDate;
+    document.getElementById('edit-date').value = isAnytimeNow ? '' : baseShiftDate(shiftDate);
     var anytimeBtn = document.getElementById('make-anytime-btn');
     // Already a no-date shift — nothing to convert. Picking a real date in
     // the field above and saving already moves it the other direction.
@@ -1212,7 +1214,7 @@ function saveShiftEdits() {
   shiftData.neighborhoods = newHoods;
   shiftData.neighborhood = newHoods[0];
 
-  if (newDate && newDate !== shiftDate) {
+  if (newDate && newDate !== baseShiftDate(shiftDate)) {
     rescheduleShift(newDate, notes, vols);
     return;
   }
@@ -1239,28 +1241,46 @@ function convertToAnytime() {
   rescheduleShift('anytime-' + Date.now(), notes, vols);
 }
 
-function rescheduleShift(newDate, notes, vols) {
-  if (!confirm('Move this shift from '+formatDate(shiftDate)+' to '+formatDate(newDate)+'? This moves all planned routes and buckets to the new date.')) {
-    document.getElementById('edit-date').value = (shiftDate.indexOf('anytime') === 0) ? '' : shiftDate;
-    return;
+// Finds the next free "date__2", "date__3"... key for a date that's
+// already taken — same scheme shifts.html uses when creating a brand new
+// shift on an occupied date. Used here so moving a shift onto a date that
+// already has one stacks it as a second shift instead of refusing outright.
+function nextStackedShiftKey(baseDate) {
+  function tryNext(n) {
+    var candidate = baseDate + '__' + n;
+    return fbGet('/canvass-days/' + candidate).then(function(existing){
+      return existing ? tryNext(n+1) : candidate;
+    });
   }
+  return tryNext(2);
+}
+
+function rescheduleShift(newDateInput, notes, vols) {
   var hoods = shiftHoods;
   var oldDate = shiftDate;
 
-  fbGet('/canvass-days/'+newDate).then(function(existing){
-    if (existing) {
-      showToast('A shift already exists on that date — pick a different date');
-      document.getElementById('edit-date').value = oldDate;
-      return Promise.reject('exists');
-    }
+  fbGet('/canvass-days/'+newDateInput).then(function(existing){
+    var stacking = !!existing;
+    return (stacking ? nextStackedShiftKey(newDateInput) : Promise.resolve(newDateInput)).then(function(finalDate){
+      var msg = stacking
+        ? 'That date already has a shift. Add this as a second shift on '+formatDate(finalDate)+'? This moves all planned routes and buckets to the new shift — the existing one on that date is untouched.'
+        : 'Move this shift from '+formatDate(shiftDate)+' to '+formatDate(finalDate)+'? This moves all planned routes and buckets to the new date.';
+      if (!confirm(msg)) {
+        document.getElementById('edit-date').value = (shiftDate.indexOf('anytime') === 0) ? '' : baseShiftDate(shiftDate);
+        return Promise.reject('cancelled');
+      }
+      return finalDate;
+    });
+  }).then(function(newDate){
     return Promise.all(hoods.map(function(hood){
       return Promise.all([
         fbGet('/'+hood+'/assignments/'+oldDate),
         fbGet('/'+hood+'/logs/'+oldDate),
         fbGet('/'+hood+'/buckets/'+oldDate),
       ]);
-    }));
-  }).then(function(perHoodResults){
+    })).then(function(perHoodResults){ return {newDate:newDate, perHoodResults:perHoodResults}; });
+  }).then(function(res){
+    var newDate = res.newDate, perHoodResults = res.perHoodResults;
     var updatedShiftData = Object.assign({}, shiftData, {notes: notes, volunteers: vols});
     var writes = [fbPut('/canvass-days/'+newDate, updatedShiftData)];
 
@@ -1273,19 +1293,19 @@ function rescheduleShift(newDate, notes, vols) {
       if (oldBuckets) writes.push(fbPut('/'+hood+'/buckets/'+newDate, oldBuckets));
     });
 
-    return Promise.all(writes);
-  }).then(function(){
+    return Promise.all(writes).then(function(){ return newDate; });
+  }).then(function(newDate){
     var deletes = [fbPut('/canvass-days/'+oldDate, null)];
     hoods.forEach(function(hood){
       deletes.push(fbPut('/'+hood+'/assignments/'+oldDate, null));
       deletes.push(fbPut('/'+hood+'/logs/'+oldDate, null));
       deletes.push(fbPut('/'+hood+'/buckets/'+oldDate, null));
     });
-    return Promise.all(deletes);
-  }).then(function(){
+    return Promise.all(deletes).then(function(){ return newDate; });
+  }).then(function(newDate){
     window.location.href = 'shift.html?date='+newDate;
   }).catch(function(err){
-    if (err !== 'exists') showToast('Reschedule failed — please try again');
+    if (err !== 'cancelled') showToast('Reschedule failed — please try again');
   });
 }
 function deleteShift() {
@@ -1329,7 +1349,7 @@ function printWalkSheet() {
       +'<td class="num">'+(i+1)+'</td>'
       +'<td class="addr"><strong>'+addr.n+'</strong> '+addr.s+(addr.u?' &middot; <span style="font-weight:400;color:#6b6860;">'+addr.u+'</span>':'')
         +(meta?'<div style="font-size:7.5pt;color:#d97706;font-weight:600;">'+meta+'</div>':'')+'</td>'
-      +'<td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td>'
+      +'<td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td><td class="cb"></td>'
       +'<td class="notes"></td></tr>';
   }).join('');
 
@@ -1364,7 +1384,7 @@ function printWalkSheet() {
     +'<div class="hdr-r"><div class="cnt">'+sorted.length+'</div><div class="lbl">Addresses</div></div></div>'
     +'<div id="walk-map"></div>'
     +'<div class="wm-cap">Route map &middot; numbers correspond to list below</div>'
-    +'<table><thead><tr><th></th><th class="al">Address</th><th>Not Home</th><th>Vacant</th><th>For Sale</th><th>No Solic.</th><th>No Access</th><th>Dog</th><th>Refused</th><th>Accepted</th><th>Other</th><th style="text-align:left;padding-left:6px;">Notes / Contact / Sign</th></tr></thead>'
+    +'<table><thead><tr><th></th><th class="al">Address</th><th>Not Home</th><th>Vacant</th><th>For Sale</th><th>No Solic.</th><th>No Access</th><th>Dog</th><th>Refused</th><th>Accepted</th><th>Other</th><th>Skipped</th><th style="text-align:left;padding-left:6px;">Notes / Contact / Sign</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table>'
     +'<div class="footer"><span>Cassie Iverson for Roseville City Council 2026 &middot; cassie4roseville.com</span><span>Printed '+new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</span></div>'
     +'</div>'

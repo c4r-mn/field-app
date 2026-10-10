@@ -18,7 +18,7 @@ var CONTACT_COLORS = {
   'Not Home':'#64748b','Vacant':'#475569','For Sale':'#7c3aed',
   'No Soliciting':'#92400e','No Access':'#78716c','Dog Present':'#ea580c',
   'Refused':'#c0392b',
-  'Accepted':'#27ae60','Other Language':'#2563eb',
+  'Accepted':'#27ae60','Other Language':'#2563eb','Skipped':'#ca8a04',
 };
 
 var CANVASSER_COLORS = ['#2563eb','#7c3aed','#0891b2','#dc2626','#ea580c','#db2777','#059669','#ca8a04'];
@@ -1307,10 +1307,14 @@ function buildSetupSelects() {
       var o=document.createElement('option');
       o.value=date;
       var day=canvassDays[date];
-      var label=formatDate(date)+(date===today?' (today)':'');
+      // A second/third shift on the same date (date__2, date__3...) is still
+      // "today" for labeling purposes — baseShiftDate() strips the suffix so
+      // every shift on today's date gets tagged, not just the first one.
+      var isToday=baseShiftDate(date)===today;
+      var label=formatDate(date)+(isToday?' (today)':'');
       if(day&&day.notes) label+=' · '+day.notes;
       o.textContent=label;
-      if(date===today) o.selected=true;
+      if(isToday) o.selected=true;
       ds.appendChild(o);
     });
   }
@@ -1559,9 +1563,11 @@ function openDoor(id){
   var de=document.getElementById('door-email'); if(de) de.value='';
   var sb=document.getElementById('chk-stopby'); if(sb) sb.classList.remove('checked');
   document.getElementById('door-notes').value='';
+  updateNotesRequirement(null);
   var log=logs[id];
   if(log){
     var cb=document.querySelector('.contact-btn[data-r="'+log.contact+'"]'); if(cb) cb.classList.add('active');
+    updateNotesRequirement(log.contact);
     if(log.litLeft||log.cardLeft) document.getElementById('chk-lit').classList.add('checked'); // support both old+new
     if(log.wantContact){
       document.getElementById('chk-contact').classList.add('checked');
@@ -1580,7 +1586,20 @@ function openDoor(id){
   openOverlay('door-overlay');
 }
 
-function selContact(el){document.querySelectorAll('.contact-btn').forEach(function(b){b.classList.remove('active');});el.classList.add('active');}
+// Nudges the canvasser to say why when the result is "Skipped" — just a
+// placeholder hint, not required, so Save never blocks on this.
+function updateNotesRequirement(contact){
+  var lbl=document.getElementById('door-notes-label');
+  var ta=document.getElementById('door-notes');
+  if(!lbl) return;
+  lbl.textContent='Notes';
+  if(ta) ta.placeholder=(contact==='Skipped')?'Why was this skipped? (optional) e.g. aggressive dog, ran out of time…':'Any notes…';
+}
+function selContact(el){
+  document.querySelectorAll('.contact-btn').forEach(function(b){b.classList.remove('active');});
+  el.classList.add('active');
+  updateNotesRequirement(el.dataset.r);
+}
 function toggleWantsContact(el){
   el.classList.toggle('checked');
   var cf=document.getElementById('contact-fields');

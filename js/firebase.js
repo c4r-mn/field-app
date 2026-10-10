@@ -52,14 +52,28 @@ function fbPatch(path, data) {
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
+// A calendar date can now have more than one shift on it — the first shift
+// on 2026-10-15 is keyed "2026-10-15" same as always, but a second (or
+// third...) shift created on that same date gets "2026-10-15__2",
+// "2026-10-15__3", etc. so each shift still gets its own fully independent
+// /canvass-days entry (and its own /assignments, /logs, /buckets
+// namespace per neighborhood — exactly like anytime-<timestamp> shifts
+// already get their own namespace). Anywhere that needs the actual
+// calendar date out of a shift key — for display, or for day-vs-day
+// comparisons — strips that suffix first with this helper.
+function baseShiftDate(dateStr) {
+  if (!dateStr) return dateStr;
+  var m = /^(\d{4}-\d{2}-\d{2})__\d+$/.exec(dateStr);
+  return m ? m[1] : dateStr;
+}
 function formatDate(dateStr) {
   if (dateStr && dateStr.indexOf('anytime') === 0) return 'No Specific Date';
-  var d = new Date(dateStr + 'T12:00:00');
+  var d = new Date(baseShiftDate(dateStr) + 'T12:00:00');
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 function formatDateLong(dateStr) {
   if (dateStr && dateStr.indexOf('anytime') === 0) return 'No Specific Date';
-  var d = new Date(dateStr + 'T12:00:00');
+  var d = new Date(baseShiftDate(dateStr) + 'T12:00:00');
   return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 }
 function todayKey() {

@@ -141,6 +141,7 @@
       <div class="contact-btn" data-r="Refused" onclick="selContact(this)">Refused</div>
       <div class="contact-btn" data-r="Accepted" onclick="selContact(this)">Accepted</div>
       <div class="contact-btn" data-r="Other Language" onclick="selContact(this)">Other Language</div>
+      <div class="contact-btn" data-r="Skipped" onclick="selContact(this)">Skipped</div>
     </div>
 
     <!-- Actions -->
@@ -165,7 +166,7 @@
       <div class="check-row" id="chk-revisit" onclick="this.classList.toggle('checked')"><div class="check-box">✓</div><div class="check-label">🔄 Visit Again</div></div>
     </div>
 
-    <span class="field-label">Notes</span>
+    <span class="field-label" id="door-notes-label">Notes</span>
     <textarea class="field-input" id="door-notes" rows="2" placeholder="Any notes…" style="resize:none;"></textarea>
 
     <div style="display:flex;gap:10px;margin-top:4px;">
