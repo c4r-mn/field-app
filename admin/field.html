@@ -234,7 +234,7 @@ function bulkUndoLetterSent() {
     var addrId = pair[0], log = pair[1];
     if (!log || LETTER_ELIGIBLE.indexOf(log.contact) === -1) return;
     if (!activeHoods.has(log.hoodKey)) return;
-    if (activeDate !== 'all' && log.date !== activeDate) return;
+    if (!logMatchesDate(log)) return;
     if (!log.letterSent) return; // not marked, nothing to undo
     if (!log.hoodKey || !log.date || !log.volId) return; // need a real path to write to
     candidates.push(addrId);
@@ -243,7 +243,7 @@ function bulkUndoLetterSent() {
   if (!candidates.length) { showToast('No Letter Sent addresses in the current view to undo'); return; }
 
   var hoodLabel = hoodSelectionLabel();
-  var dateLabel = activeDate === 'all' ? 'all dates' : activeDate;
+  var dateLabel = activeDate === 'all' ? 'all dates' : (activeDate === 'anytime' ? 'No Specific Date' : activeDate);
   if (!confirm('Undo Letter Sent on '+candidates.length+' address'+(candidates.length===1?'':'es')+' in '+hoodLabel+' ('+dateLabel+')? The original contact result is not affected — this only clears the letter-sent flag.')) return;
 
   var writes = candidates.map(function(addrId){
@@ -270,7 +270,7 @@ function bulkMarkLetterSent() {
     var addrId = pair[0], log = pair[1];
     if (!log || LETTER_ELIGIBLE.indexOf(log.contact) === -1) return;
     if (!activeHoods.has(log.hoodKey)) return;
-    if (activeDate !== 'all' && log.date !== activeDate) return;
+    if (!logMatchesDate(log)) return;
     if (log.letterSent) return; // already marked, skip
     if (!log.hoodKey || !log.date || !log.volId) return; // need a real path to write to
     candidates.push(addrId);
@@ -279,7 +279,7 @@ function bulkMarkLetterSent() {
   if (!candidates.length) { showToast('No unmarked No Soliciting / No Access / Dog Present addresses in the current view'); return; }
 
   var hoodLabel = hoodSelectionLabel();
-  var dateLabel = activeDate === 'all' ? 'all dates' : activeDate;
+  var dateLabel = activeDate === 'all' ? 'all dates' : (activeDate === 'anytime' ? 'No Specific Date' : activeDate);
   if (!confirm('Mark '+candidates.length+' address'+(candidates.length===1?'':'es')+' in '+hoodLabel+' ('+dateLabel+') as Letter Sent? The original contact result stays — this just adds a letter-sent record on top.')) return;
 
   var writes = candidates.map(function(addrId){
@@ -346,16 +346,6 @@ function loadFieldData() {
     canvassDays = results[1] || {};
     var hoodResults = results.slice(2);
 
-    var dates = Object.keys(canvassDays).sort().reverse();
-    var sel = document.getElementById('date-select');
-    if (sel) {
-      dates.forEach(function(d) {
-        var o = document.createElement('option');
-        o.value = d; o.textContent = formatDate(d);
-        sel.appendChild(o);
-      });
-    }
-
     var hoodList = document.getElementById('hood-ms-list');
     if (hoodList) {
       (window.NEIGHBORHOODS||[]).forEach(function(n) {
@@ -405,6 +395,7 @@ function loadFieldData() {
       });
     });
 
+    buildDateOptions();
     document.getElementById('field-sub').textContent =
       Object.keys(allLogs).length + ' doors logged across all shifts';
     initFieldMap();
@@ -428,6 +419,32 @@ function initFieldMap() {
 
 function activeNeighborhoods() {
   return (window.NEIGHBORHOODS || []).filter(function(n){ return activeHoods.has(n.key); });
+}
+
+// Date filter groups every shift on the same calendar day (date, date__2, ...)
+// into one entry, and all undated "anytime-*" shifts into a single entry.
+function dateGroupKey(d) {
+  if (!d) return '';
+  if (String(d).indexOf('anytime') === 0) return 'anytime';
+  return baseShiftDate(d);
+}
+function logMatchesDate(log) {
+  return activeDate === 'all' || dateGroupKey(log && log.date) === activeDate;
+}
+function buildDateOptions() {
+  var sel = document.getElementById('date-select');
+  if (!sel) return;
+  var groups = {};
+  Object.keys(canvassDays).forEach(function(d){ groups[dateGroupKey(d)] = true; });
+  Object.keys(allLogs).forEach(function(id){ var g = dateGroupKey(allLogs[id].date); if (g) groups[g] = true; });
+  var keys = Object.keys(groups).filter(function(k){ return k !== 'anytime'; }).sort().reverse();
+  if (groups['anytime']) keys.push('anytime');
+  sel.innerHTML = '<option value="all">All Dates</option>';
+  keys.forEach(function(k){
+    var o = document.createElement('option');
+    o.value = k; o.textContent = k === 'anytime' ? 'No Specific Date' : formatDate(k);
+    sel.appendChild(o);
+  });
 }
 
 function setDateFilter(date) {
@@ -520,7 +537,7 @@ function refreshFieldMarkers() {
       var isNoSolic = log && log.contact === 'No Soliciting';
       var isNoAccess = log && log.contact === 'No Access';
       var isDogPresent = log && log.contact === 'Dog Present';
-      if (activeDate !== 'all' && isLogged && log.date !== activeDate) return;
+      if (isLogged && !logMatchesDate(log)) return;
       if (isLogged && isNoSolic && !showFilters.nosolic) return;
       if (isLogged && isNoAccess && !showFilters.noaccess) return;
       if (isLogged && isDogPresent && !showFilters.dogpresent) return;
@@ -728,7 +745,7 @@ function exportList(type) {
       var addrId=pair[0], log=pair[1];
       if (!log.wantContact) return;
       if (!activeHoods.has(log.hoodKey)) return;
-      if (activeDate !== 'all' && log.date !== activeDate) return;
+      if (!logMatchesDate(log)) return;
       var addr = findAddr(addrId);
       rows.push([log.name||'',log.lastname||'',log.phone||'',log.email||'',
         addr?addr.n+' '+addr.s+(addr.u?' '+addr.u:''):'',hoodDisplayNameFor(log.hoodKey),log.date||'',log.notes||''].map(csvCell).join(','));
@@ -741,7 +758,7 @@ function exportList(type) {
       var addrId=pair[0], log=pair[1];
       if (LETTER_ELIGIBLE.indexOf(log.contact) === -1) return;
       if (!activeHoods.has(log.hoodKey)) return;
-      if (activeDate !== 'all' && log.date !== activeDate) return;
+      if (!logMatchesDate(log)) return;
       var addr = findAddr(addrId);
       rows.push([addr?addr.n:'',addr?addr.u||'':'',addr?addr.s:'',hoodDisplayNameFor(log.hoodKey),log.contact,log.date||'',log.letterSent?'Yes':'No'].map(csvCell).join(','));
     });
