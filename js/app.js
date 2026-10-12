@@ -1278,6 +1278,36 @@ function updateAllLegend(){
 }
 
 // ── CANVASSER SETUP ───────────────────────
+function buildDateSelect() {
+  var ds=document.getElementById('setup-date');
+  if(!ds) return;
+  var who=(document.getElementById('setup-name')||{}).value||'';
+  ds.innerHTML='<option value="">— Select shift date —</option>';
+  if(!who) return; // nobody selected yet -> nothing to show
+  var now=new Date();
+  var today=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  var days=Object.keys(canvassDays).sort().reverse().filter(function(date){
+    var day=canvassDays[date];
+    if(!day||day.closed) return false;                       // closed routes never show
+    var base=baseShiftDate(date);
+    if(/^\d{4}-\d{2}-\d{2}$/.test(base) && base<today) return false; // past dates never show
+    var vols=day.volunteers||[];
+    if(!Array.isArray(vols)) vols=Object.keys(vols).map(function(k){return vols[k];});
+    return vols.indexOf(who)!==-1;                           // only routes this person is assigned to
+  });
+  days.forEach(function(date){
+    var o=document.createElement('option');
+    o.value=date;
+    var day=canvassDays[date];
+    var isToday=baseShiftDate(date)===today;
+    var label=formatDate(date)+(isToday?' (today)':'');
+    if(day&&day.notes) label+=' · '+day.notes;
+    o.textContent=label;
+    if(isToday) o.selected=true;
+    ds.appendChild(o);
+  });
+}
+function onSetupNameChange() { buildDateSelect(); onSetupChange(); }
 function buildSetupSelects() {
   var vols=activeVols();
   var ns=document.getElementById('setup-name');
@@ -1295,30 +1325,10 @@ function buildSetupSelects() {
       ns.appendChild(o);
     });
   }
-  var ds=document.getElementById('setup-date');
-  if(ds){
-    ds.innerHTML='<option value="">— Select shift date —</option>';
-    var now=new Date();
-    var today=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
-    var days=Object.keys(canvassDays).sort().reverse().filter(function(date){
-      return !(canvassDays[date]&&canvassDays[date].closed); // closed routes drop off the list entirely
-    });
-    // Only show dates that have a real shift scheduled — no synthetic "today" entry
-    days.forEach(function(date){
-      var o=document.createElement('option');
-      o.value=date;
-      var day=canvassDays[date];
-      // A second/third shift on the same date (date__2, date__3...) is still
-      // "today" for labeling purposes — baseShiftDate() strips the suffix so
-      // every shift on today's date gets tagged, not just the first one.
-      var isToday=baseShiftDate(date)===today;
-      var label=formatDate(date)+(isToday?' (today)':'');
-      if(day&&day.notes) label+=' · '+day.notes;
-      o.textContent=label;
-      if(isToday) o.selected=true;
-      ds.appendChild(o);
-    });
+  if(ns && myId && ns.value===myId && !false){
+    ns.disabled=true; // signed-in canvasser is matched to the roster — can only view their own routes
   }
+  buildDateSelect();
   // Trigger validation now that fields may be pre-selected
   onSetupChange();
 }
