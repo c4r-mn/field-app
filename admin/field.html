@@ -627,7 +627,9 @@ function renderSingleMarker(addr, log, isLogged, isUpcoming) {
       popup += '</div>';
       popup += '<button onclick="openFvEdit(\''+addr.id+'\')" style="margin-top:8px;font-size:11px;font-weight:700;padding:6px 12px;background:#D4A832;border:none;border-radius:5px;cursor:pointer;width:100%;">Edit</button>';
     } else if (isUpcoming) {
-      popup += '<div style="margin-top:8px;"><em>Upcoming: '+formatDate(upcomingAssigned[addr.id])+'</em></div>';
+      var _uk = upcomingAssigned[addr.id], _ud = canvassDays[_uk];
+        var _ul = formatDate(_uk) + (_ud ? (_ud.notes ? ' · '+_ud.notes : '') + (_ud.closed ? ' (shift CLOSED)' : '') : ' (NO SHIFT RECORD — route exists but shift is missing)');
+        popup += '<div style="margin-top:8px;"><em>Upcoming: '+String(_ul).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</em></div>';
     } else {
       popup += '<div style="margin-top:8px;"><em>Not yet canvassed</em></div>';
     }
