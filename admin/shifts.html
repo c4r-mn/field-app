@@ -363,8 +363,14 @@ function computeShiftStatus(date, day) {
       if (a && (a.route||[]).length) assignedIds[volId] = true;
     });
   });
-  var assignedList = Object.keys(assignedIds);
   var rosterVols = day.volunteers || [];
+  // When a roster is set on the shift it is the source of truth: someone who
+  // was removed from the roster must not reappear just because a leftover
+  // planned route still exists under their name. Only legacy shifts with no
+  // roster fall back to whoever has an assignment.
+  var assignedList = Object.keys(assignedIds).filter(function(id){
+    return !rosterVols.length || rosterVols.indexOf(id) !== -1;
+  });
   var allVolIds = rosterVols.slice();
   assignedList.forEach(function(id){ if (allVolIds.indexOf(id)===-1) allVolIds.push(id); });
 
