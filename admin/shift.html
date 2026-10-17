@@ -1215,6 +1215,16 @@ function saveShiftEdits() {
   shiftData.neighborhoods = newHoods;
   shiftData.neighborhood = newHoods[0];
 
+  // Anyone no longer on the roster who still has a planned route is an
+  // "orphan" — shifts.html and other lists treat anyone with a saved route as
+  // part of the shift, so their name would keep showing. Clear those routes
+  // (door logs are never touched; anyone who already logged doors is kept).
+  var orphans = orphanedAssignees(vols);
+  if (orphans.length) {
+    var names = orphans.map(volName).join(', ');
+    if (!confirm('Removing '+names+' from this shift also clears their planned route'+(orphans.length>1?'s':'')+'. Door logs are not affected. Continue?')) return;
+  }
+
   if (newDate && newDate !== baseShiftDate(shiftDate)) {
     rescheduleShift(newDate, notes, vols);
     return;
@@ -1222,10 +1232,25 @@ function saveShiftEdits() {
 
   shiftData.notes = notes;
   shiftData.volunteers = vols;
-  fbPut('/canvass-days/'+shiftDate, shiftData).then(function(){
+  var clears = [];
+  orphans.forEach(function(id){
+    shiftHoods.forEach(function(hood){ clears.push(fbPut('/'+hood+'/assignments/'+shiftDate+'/'+id, null)); });
+  });
+  Promise.all([fbPut('/canvass-days/'+shiftDate, shiftData)].concat(clears)).then(function(){
+    orphans.forEach(function(id){ delete allAssignments[id]; });
     buildCanvasserSelect();
     showToast('Shift details saved');
   }).catch(function(){showToast('Save failed');});
+}
+
+function orphanedAssignees(vols) {
+  return Object.keys(allAssignments).filter(function(id){
+    if (vols.indexOf(id) !== -1) return false;
+    if (id === 'meet-greet') return false;
+    if (allLogs[id] && Object.keys(allLogs[id]).length) return false; // already canvassed — keep
+    var a = allAssignments[id];
+    return a && ((a.route||[]).length || Object.keys(a.assignments||{}).length);
+  });
 }
 
 function convertToAnytime() {
@@ -1287,6 +1312,11 @@ function rescheduleShift(newDateInput, notes, vols) {
 
     hoods.forEach(function(hood, i){
       var oldAssignments = perHoodResults[i][0] || null;
+      if (oldAssignments) {
+        oldAssignments = Object.assign({}, oldAssignments);
+        orphanedAssignees(vols).forEach(function(id){ delete oldAssignments[id]; });
+        if (!Object.keys(oldAssignments).length) oldAssignments = null;
+      }
       var oldLogs = perHoodResults[i][1] || null;
       var oldBuckets = perHoodResults[i][2] || null;
       if (oldAssignments) writes.push(fbPut('/'+hood+'/assignments/'+newDate, oldAssignments));
