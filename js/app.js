@@ -704,6 +704,8 @@ var addresses = [];
 var mode = 'canvass';
 var activeFilter = 'all';
 var logs = {};   // merged view: my doors + everyone else's, for map/list display only
+var prevDone = {}; // addrId -> {date,contact}: doors already logged on a past/closed shift (display only, never uploaded)
+var prevDoneLoaded = false;
 var myLogs = {}; // MY OWN doors only — this is what actually gets pushed to Firebase
 var myAssignments = {};
 var myRoute = [];
@@ -1371,7 +1373,7 @@ function startApp() {
       addresses.push(Object.assign({}, a, {_hoodKey: hk}));
     });
   });
-  logs={}; myLogs={}; myAssignments={}; signs=[]; addrToVolId={};
+  logs={}; myLogs={}; myAssignments={}; signs=[]; addrToVolId={}; prevDone={}; prevDoneLoaded=false;
   if(!map) initMap(); else {refreshAllMarkers();fitBounds();}
   var dot=document.getElementById('fb-dot'),lbl=document.getElementById('fb-lbl');
   if(dot) dot.style.background='#d97706'; if(lbl) lbl.textContent='Connecting…';
@@ -1402,7 +1404,7 @@ function showUserMenu() {
 function saveAndExit() {
   pushLogs();
   setTimeout(function(){
-    logs={}; myLogs={}; signs=[]; myAssignments={}; addrToVolId={};
+    logs={}; myLogs={}; signs=[]; myAssignments={}; addrToVolId={}; prevDone={}; prevDoneLoaded=false;
     if(pollTimer) clearInterval(pollTimer);
     doSignOut();
   },500);
@@ -1435,7 +1437,7 @@ function fitBounds(){
 function addrLabel(addr){return addr.n+' '+addr.s+(addr.u?', '+addr.u:'');}
 function isMyAddr(addr){return !!myAssignments[addr.id];}
 function markerColor(addr){
-  if(logs[addr.id]) return '#9ca3af';
+  if(logs[addr.id] || prevDone[addr.id]) return '#9ca3af';
   if(myAssignments[addr.id]) return '#D4A832';
   return (PROP_META[addr.t]||PROP_META.house).color;
 }
@@ -1443,7 +1445,7 @@ function markerColor(addr){
 function createMarker(addr){
   var color=markerColor(addr),mine=isMyAddr(addr),size=mine?20:9,op=mine?1:.35;
   var routeIdx = mine ? myRoute.indexOf(addr.id) : -1;
-  var isDone = !!logs[addr.id];
+  var isDone = !!(logs[addr.id] || prevDone[addr.id]);
   var label = (mine && routeIdx>=0 && !isDone) ? '<span style="font-size:9px;font-weight:800;color:#fff;">'+(routeIdx+1)+'</span>' : '';
   var icon=L.divIcon({className:'',html:'<div style="width:'+size+'px;height:'+size+'px;background:'+color+';border:'+(mine?'2px solid rgba(0,0,0,.2)':'1.5px solid rgba(0,0,0,.1)')+';border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.2);cursor:pointer;opacity:'+op+';display:flex;align-items:center;justify-content:center;">'+label+'</div>',iconSize:[size,size],iconAnchor:[size/2,size/2]});
   var m=L.marker([addr.lat,addr.lng],{icon:icon}).addTo(map);
@@ -1458,7 +1460,8 @@ function createMarker(addr){
 
 function makePopup(addr){
   var log=logs[addr.id],meta=PROP_META[addr.t]||PROP_META.house;
-  var sc=log?(CONTACT_COLORS[log.contact]||'#888'):'#ccc',st=log?log.contact:'Not logged';
+  var pd=(!log)?prevDone[addr.id]:null;
+  var sc=log?(CONTACT_COLORS[log.contact]||'#888'):(pd?'#9ca3af':'#ccc'),st=log?log.contact:(pd?('Done earlier'+(pd.contact?' \u00B7 '+pd.contact:'')):'Not logged');
   var detail='';
   if(log){
     if(log.interest) detail+='Interest: '+log.interest+'/5  ';
@@ -1490,13 +1493,13 @@ function renderMyList(){
     container.innerHTML='<div style="padding:32px;text-align:center;color:var(--subtle);font-size:13px;"><div style="font-size:32px;margin-bottom:12px;">\uD83D\uDCCB</div>No addresses assigned yet.<br>Check back after your shift is set up.</div>';
     return;
   }
-  mine.sort(function(a,b){var al=!!logs[a.id],bl=!!logs[b.id];if(al!==bl)return al?1:-1;var ai=myRoute.indexOf(a.id),bi=myRoute.indexOf(b.id);if(ai===-1)ai=999;if(bi===-1)bi=999;return ai-bi;});
+  mine.sort(function(a,b){var al=!!(logs[a.id]||prevDone[a.id]),bl=!!(logs[b.id]||prevDone[b.id]);if(al!==bl)return al?1:-1;var ai=myRoute.indexOf(a.id),bi=myRoute.indexOf(b.id);if(ai===-1)ai=999;if(bi===-1)bi=999;return ai-bi;});
   container.innerHTML=mine.map(function(addr){
-    var log=logs[addr.id],meta=PROP_META[addr.t]||PROP_META.house;
-    var dotColor=log?(CONTACT_COLORS[log.contact]||'#888'):'#D4A832';
-    var badge=log?'<span class="addr-badge" style="background:'+(CONTACT_COLORS[log.contact]||'#888')+'22;color:'+(CONTACT_COLORS[log.contact]||'#888')+';">'+log.contact+'</span>':'<span class="addr-badge" style="background:'+meta.color+'18;color:'+meta.color+';">'+meta.label+'</span>';
+    var log=logs[addr.id],meta=PROP_META[addr.t]||PROP_META.house,pd=(!log)?prevDone[addr.id]:null;
+    var dotColor=log?(CONTACT_COLORS[log.contact]||'#888'):(pd?'#9ca3af':'#D4A832');
+    var badge=pd?'<span class="addr-badge" style="background:#9ca3af22;color:#6b7280;">Done earlier</span>':log?'<span class="addr-badge" style="background:'+(CONTACT_COLORS[log.contact]||'#888')+'22;color:'+(CONTACT_COLORS[log.contact]||'#888')+';">'+log.contact+'</span>':'<span class="addr-badge" style="background:'+meta.color+'18;color:'+meta.color+';">'+meta.label+'</span>';
     var routeIdx = myRoute.indexOf(addr.id);
-    var numLabel = (!log && routeIdx>=0) ? '<span style="color:var(--gold-acc);font-weight:800;margin-right:4px;">'+(routeIdx+1)+'.</span>' : '';
+    var numLabel = (!log && !pd && routeIdx>=0) ? '<span style="color:var(--gold-acc);font-weight:800;margin-right:4px;">'+(routeIdx+1)+'.</span>' : '';
     return '<div class="addr-item is-mine'+(addr.id===selectedId?' selected':'')+'" data-aid="'+addr.id+'" onclick="handleAddrClick(this.dataset.aid)"><div class="addr-dot" style="background:'+dotColor+';"></div><div class="addr-info"><div class="addr-street">'+numLabel+addrLabel(addr)+'</div><div class="addr-meta">'+addr.s+(log&&log.interest?' \u00B7 \u2605'+log.interest:'')+'</div></div>'+badge+'</div>';
   }).join('');
 }
@@ -1511,7 +1514,7 @@ function renderAllList(){
   if(!addrs.length){list.innerHTML='<div style="padding:24px;text-align:center;color:var(--subtle);font-size:13px;">No addresses match.</div>';return;}
   list.innerHTML=addrs.map(function(addr){
     var log=logs[addr.id],meta=PROP_META[addr.t]||PROP_META.house;
-    var dotColor=log?(CONTACT_COLORS[log.contact]||'#888'):meta.color;
+    var dotColor=log?(CONTACT_COLORS[log.contact]||'#888'):(prevDone[addr.id]?'#9ca3af':meta.color);
     var mine=isMyAddr(addr);
     var otherVolId=!mine?addrToVolId[addr.id]:null;
     var initial=otherVolId?volName(otherVolId).charAt(0).toUpperCase():null;
@@ -1751,8 +1754,53 @@ function pushLogs(){
   }
 }
 
+// Doors already knocked on a PAST or CLOSED shift (including closed no-date
+// routes) show grey here so they don't look unvisited alongside this route.
+// Display only — never merged into `logs`/`myLogs`, so stats, exports and
+// uploads are unaffected.
+function loadPrevDone(){
+  if(prevDoneLoaded||!fbConnected||!neighborhoodKeys.length) return;
+  var now=new Date();
+  var todayStr=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  // Read per-shift paths (same /<hood>/logs/<shiftKey> shape the app already
+  // reads for today) rather than the whole /logs tree, which canvasser
+  // accounts may not be allowed to read.
+  var jobs=[];
+  Object.keys(canvassDays).forEach(function(key){
+    if(key===todayKey) return;
+    var day=canvassDays[key]; if(!day) return;
+    var base=baseShiftDate(key);
+    var isDatedPast=/^\d{4}-\d{2}-\d{2}$/.test(base)&&base<todayStr;
+    if(!(day.closed||isDatedPast)) return;              // open shifts don't count
+    var hoods=day.neighborhoods||(day.neighborhood?[day.neighborhood]:[]);
+    neighborhoodKeys.forEach(function(hk){
+      if(hoods.indexOf(hk)!==-1) jobs.push({key:key,hk:hk});
+    });
+  });
+  if(!Object.keys(canvassDays).length) return;           // shift list not loaded yet — try again next poll
+  prevDoneLoaded=true;
+  Promise.all(jobs.map(function(j){
+    return fbGet('/'+j.hk+'/logs/'+j.key).catch(function(){return null;}).then(function(d){return {key:j.key,data:d};});
+  })).then(function(results){
+    var found={};
+    results.forEach(function(r){
+      var byVol=r.data; if(!byVol||typeof byVol!=='object') return;
+      Object.keys(byVol).forEach(function(vid){
+        var vl=byVol[vid]; if(!vl||typeof vl!=='object') return;
+        Object.keys(vl).forEach(function(addrId){
+          var e=vl[addrId]; if(!e||typeof e!=='object'||!e.contact) return;
+          if(!found[addrId]) found[addrId]={date:r.key,contact:e.contact};
+        });
+      });
+    });
+    prevDone=found;
+    refreshAllMarkers(); renderMyList(); renderAllList();
+  });
+}
+
 function pullCanvasserData(){
   if(!fbConnected||!neighborhoodKeys.length) return;
+  loadPrevDone();
   // Pull assignments from EVERY neighborhood this shift covers and merge
   // — a route can now genuinely span more than one neighborhood.
   Promise.all(neighborhoodKeys.map(function(hk){
