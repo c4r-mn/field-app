@@ -108,6 +108,7 @@
     </div>
 
     <!-- Upcoming view -->
+    <div id="orphan-routes" style="display:none;"></div>
     <div id="view-upcoming">
       <div class="page-card">
         <div class="shift-subsection">
@@ -176,6 +177,7 @@ function loadShifts() {
     try { savedView = localStorage.getItem('c4rShiftsView') || 'upcoming'; } catch(e) {}
     setView(savedView);
     renderShifts();
+    findOrphanRoutes();
     buildNewForm();
     // Auto-open new form if ?new=1
     if (window.location.search.indexOf('new=1') !== -1) toggleNewForm();
@@ -479,11 +481,90 @@ function renderShifts() {
   document.getElementById('past-count').textContent = past.length ? '('+past.length+')' : '';
 }
 
+// ── UNLINKED ROUTES ───────────────────────────────────────────────────────
+// Routes/buckets saved under a shift key that has no shift record (usually
+// because the shift was deleted while its routes were still planned). Field
+// View still shows those doors as "upcoming", so surface them here and let
+// the admin restore the shift around them.
+var orphanRoutes = {};
+function findOrphanRoutes() {
+  var hoods = (window.NEIGHBORHOODS || []).map(function(n){ return n.key; });
+  Promise.all(hoods.map(function(h){
+    return Promise.all([fbGet('/'+h+'/assignments').catch(function(){return null;}), fbGet('/'+h+'/buckets').catch(function(){return null;})]);
+  })).then(function(res){
+    orphanRoutes = {};
+    res.forEach(function(r, i){
+      var hood = hoods[i];
+      function note(key){
+        if (canvassDays[key]) return null;
+        if (key.indexOf('anytime') !== 0 && key < today) return null; // old dates aren't "upcoming"
+        if (!orphanRoutes[key]) orphanRoutes[key] = {hoods:[], vols:{}, labels:[], doors:0};
+        var o = orphanRoutes[key];
+        if (o.hoods.indexOf(hood) === -1) o.hoods.push(hood);
+        return o;
+      }
+      var a = r[0] || {};
+      Object.keys(a).forEach(function(key){
+        Object.keys(a[key] || {}).forEach(function(volId){
+          var v = a[key][volId];
+          if (!v || volId === 'meet-greet') return;
+          var n = (v.route || []).length || Object.keys(v.assignments || {}).length;
+          if (!n) return;
+          var o = note(key); if (!o) return;
+          o.vols[volId] = true; o.doors += n;
+        });
+      });
+      var b = r[1] || {};
+      Object.keys(b).forEach(function(key){
+        Object.keys(b[key] || {}).forEach(function(bid){
+          var v = b[key][bid];
+          if (!v || !(v.route || []).length) return;
+          var o = note(key); if (!o) return;
+          if (v.label) o.labels.push(v.label);
+        });
+      });
+    });
+    renderOrphanRoutes();
+  });
+}
+function renderOrphanRoutes() {
+  var el = document.getElementById('orphan-routes');
+  var keys = Object.keys(orphanRoutes);
+  if (!keys.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  var hoodName = function(k){ var h=(window.NEIGHBORHOODS||[]).find(function(n){return n.key===k;}); return h?h.displayName:k; };
+  el.style.display = 'block';
+  el.innerHTML = '<div class="page-card" style="border:2px solid #c0392b;margin-bottom:16px;">' +
+    '<div style="font-weight:800;font-size:15px;margin-bottom:4px;">Routes without a shift ('+keys.length+')</div>' +
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">These planned routes exist but their shift is missing (likely deleted), so they don\'t appear below. They still show as upcoming in Field View. Restore the shift to bring them back, then use View / Edit to set the name and canvassers.</div>' +
+    keys.map(function(key){
+      var o = orphanRoutes[key];
+      var vols = Object.keys(o.vols).map(volName).join(', ') || 'no canvasser assigned';
+      return '<div style="display:flex;align-items:center;gap:10px;justify-content:space-between;border-top:1px solid var(--border);padding:10px 0;">' +
+        '<div><div style="font-weight:700;">'+escapeHtml(o.hoods.map(hoodName).join(' + '))+(o.labels.length?' · '+escapeHtml(o.labels.slice(0,3).join(', ')):'')+'</div>' +
+        '<div style="font-size:12px;color:var(--muted);">'+(key.indexOf('anytime')===0?'No Specific Date':escapeHtml(formatDate(key)))+' · '+o.doors+' doors · '+escapeHtml(vols)+'</div></div>' +
+        '<button class="btn btn-sm" data-key="'+escapeHtml(key)+'" onclick="restoreOrphan(this.dataset.key)">Restore shift</button></div>';
+    }).join('') + '</div>';
+}
+function restoreOrphan(key) {
+  var o = orphanRoutes[key]; if (!o) return;
+  var rec = { neighborhoods:o.hoods, neighborhood:o.hoods[0], notes:(o.labels[0]||''), volunteers:Object.keys(o.vols), created:new Date().toISOString(), restored:true };
+  fbPut('/canvass-days/'+key, rec).then(function(){
+    canvassDays[key] = rec; delete orphanRoutes[key];
+    return loadPlanningStatus();
+  }).then(function(){ renderShifts(); renderOrphanRoutes(); showToast('Shift restored — use View / Edit to add canvassers'); })
+  .catch(function(){ showToast('Restore failed'); });
+}
+
 function deleteShift(date) {
-  if (!confirm('Delete shift for '+formatDate(date)+'?')) return;
+  var hasRoutes = Object.keys(assignmentsByPath).concat(Object.keys(bucketsByPath)).some(function(k){
+    if (k.split('|')[1] !== date) return false;
+    var a = assignmentsByPath[k] || {}, b = bucketsByPath[k] || {};
+    return Object.keys(a).length || Object.keys(b).length;
+  });
+  if (!confirm('Delete shift for '+formatDate(date)+'?'+(hasRoutes?'\n\nThis shift has planned routes. They will be kept and listed under "Routes without a shift" so you can restore them.':''))) return;
   delete canvassDays[date];
   fbPut('/canvass-days/'+date, null).then(function() {
-    renderShifts(); showToast('Shift deleted');
+    renderShifts(); findOrphanRoutes(); showToast('Shift deleted');
   });
 }
 
