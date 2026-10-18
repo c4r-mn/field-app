@@ -535,14 +535,15 @@ function renderOrphanRoutes() {
   el.style.display = 'block';
   el.innerHTML = '<div class="page-card" style="border:2px solid #c0392b;margin-bottom:16px;">' +
     '<div style="font-weight:800;font-size:15px;margin-bottom:4px;">Routes without a shift ('+keys.length+')</div>' +
-    '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">These planned routes exist but their shift is missing (likely deleted), so they don\'t appear below. They still show as upcoming in Field View. Restore the shift to bring them back, then use View / Edit to set the name and canvassers.</div>' +
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">These planned routes exist but their shift is missing (likely deleted), so they don\'t appear below. They still show as upcoming in Field View. Restore the shift to bring it back (then use View / Edit to set the name and canvassers), or clear the routes if the shift was meant to be deleted.</div>' +
     keys.map(function(key){
       var o = orphanRoutes[key];
       var vols = Object.keys(o.vols).map(volName).join(', ') || 'no canvasser assigned';
       return '<div style="display:flex;align-items:center;gap:10px;justify-content:space-between;border-top:1px solid var(--border);padding:10px 0;">' +
         '<div><div style="font-weight:700;">'+escapeHtml(o.hoods.map(hoodName).join(' + '))+(o.labels.length?' · '+escapeHtml(o.labels.slice(0,3).join(', ')):'')+'</div>' +
         '<div style="font-size:12px;color:var(--muted);">'+(key.indexOf('anytime')===0?'No Specific Date':escapeHtml(formatDate(key)))+' · '+o.doors+' doors · '+escapeHtml(vols)+'</div></div>' +
-        '<button class="btn btn-sm" data-key="'+escapeHtml(key)+'" onclick="restoreOrphan(this.dataset.key)">Restore shift</button></div>';
+        '<div style="display:flex;gap:6px;flex-shrink:0;"><button class="btn btn-sm" data-key="'+escapeHtml(key)+'" onclick="restoreOrphan(this.dataset.key)">Restore shift</button>' +
+        '<button class="btn btn-danger btn-sm" data-key="'+escapeHtml(key)+'" onclick="deleteOrphan(this.dataset.key)">Clear routes</button></div></div>';
     }).join('') + '</div>';
 }
 function restoreOrphan(key) {
@@ -555,17 +556,37 @@ function restoreOrphan(key) {
   .catch(function(){ showToast('Restore failed'); });
 }
 
+function clearRoutesFor(key, hoods) {
+  // Removes planned routes + buckets only. Door logs are never touched.
+  var writes = [];
+  hoods.forEach(function(h){
+    writes.push(fbPut('/'+h+'/assignments/'+key, null));
+    writes.push(fbPut('/'+h+'/buckets/'+key, null));
+  });
+  return Promise.all(writes);
+}
+
 function deleteShift(date) {
-  var hasRoutes = Object.keys(assignmentsByPath).concat(Object.keys(bucketsByPath)).some(function(k){
-    if (k.split('|')[1] !== date) return false;
-    var a = assignmentsByPath[k] || {}, b = bucketsByPath[k] || {};
-    return Object.keys(a).length || Object.keys(b).length;
+  var day = canvassDays[date] || {};
+  var hoods = day.neighborhoods || (day.neighborhood ? [day.neighborhood] : []);
+  var hasRoutes = hoods.some(function(h){
+    var k = h+'|'+date;
+    return Object.keys(assignmentsByPath[k] || {}).length || Object.keys(bucketsByPath[k] || {}).length;
   });
-  if (!confirm('Delete shift for '+formatDate(date)+'?'+(hasRoutes?'\n\nThis shift has planned routes. They will be kept and listed under "Routes without a shift" so you can restore them.':''))) return;
+  if (!confirm('Delete shift for '+formatDate(date)+'?'+(hasRoutes?'\n\nIts planned routes and buckets will be cleared too, so those doors go back to "not yet canvassed". Door logs already recorded are kept.':''))) return;
   delete canvassDays[date];
-  fbPut('/canvass-days/'+date, null).then(function() {
+  Promise.all([fbPut('/canvass-days/'+date, null), clearRoutesFor(date, hoods)]).then(function() {
+    hoods.forEach(function(h){ delete assignmentsByPath[h+'|'+date]; delete bucketsByPath[h+'|'+date]; });
     renderShifts(); findOrphanRoutes(); showToast('Shift deleted');
-  });
+  }).catch(function(){ showToast('Delete failed — please retry'); });
+}
+
+function deleteOrphan(key) {
+  var o = orphanRoutes[key]; if (!o) return;
+  if (!confirm('Clear these planned routes ('+o.doors+' doors)? They will go back to "not yet canvassed" in Field View so you can schedule them again. Door logs already recorded are kept.')) return;
+  clearRoutesFor(key, o.hoods).then(function(){
+    delete orphanRoutes[key]; renderOrphanRoutes(); showToast('Routes cleared');
+  }).catch(function(){ showToast('Clear failed — please retry'); });
 }
 
 var _toastTimer;
