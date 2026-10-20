@@ -74,7 +74,7 @@
       <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:8px;">
         <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#D4A832;margin-right:5px;"></span>Planned this week</span>
         <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3b82f6;margin-right:5px;"></span>Planned, no specific date</span>
-        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#9ca3af;margin-right:5px;"></span>Already knocked</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#9ca3af;margin-right:5px;"></span>Already knocked (all shifts)</span>
       </div>
       <div id="dash-map" style="height:320px;border-radius:8px;border:1px solid var(--border);"></div>
       <div id="dash-map-note" style="font-size:12px;color:var(--subtle);margin-top:6px;"></div>
@@ -238,6 +238,31 @@ function initDashMap() {
     attribution:'&copy; OpenStreetMap &copy; CARTO'
   }).addTo(dashMap);
 
+  // Layer 1: every door ever logged, in grey (canvas-rendered so thousands stay fast)
+  var canvasR = L.canvas({padding:0.5});
+  var knockedPts = [], knockedSeen = {};
+  var knockedDone = Promise.all((window.NEIGHBORHOODS||[]).map(function(n){
+    return fbGet('/'+n.key+'/logs').catch(function(){return null;}).then(function(all){
+      if (!all) return;
+      var byId = {}; (window.NEIGHBORHOOD_DATA[n.key]||[]).forEach(function(a){ byId[a.id]=a; });
+      Object.values(all).forEach(function(byVol){
+        if (!byVol || typeof byVol !== 'object') return;
+        Object.values(byVol).forEach(function(vl){
+          if (!vl || typeof vl !== 'object') return;
+          Object.keys(vl).forEach(function(id){
+            if (knockedSeen[id]) return; knockedSeen[id] = true;
+            var a = byId[id]; if (!a) return;
+            L.circleMarker([a.lat,a.lng],{renderer:canvasR,radius:4,color:'#fff',weight:1,fillColor:'#9ca3af',fillOpacity:.8})
+              .bindTooltip(esc(a.n+' '+a.s+(a.u?' '+a.u:''))+' — knocked').addTo(dashMap);
+            knockedPts.push([a.lat,a.lng]);
+          });
+        });
+      });
+    });
+  }));
+  knockedDone.then(drawPlanned);
+
+  function drawPlanned() {
   var weekEnd = addDaysStr(today, 6);
   var shifts = Object.keys(canvassDays).filter(function(key){
     var day = canvassDays[key]; if (!day || day.closed) return false;
@@ -248,7 +273,7 @@ function initDashMap() {
 
   var pts = [], counts = {week:0, anytime:0}, pending = 0;
   var note = document.getElementById('dash-map-note');
-  if (!shifts.length) { note.textContent = 'No planned shifts this week and no open no-specific-date shifts.'; return; }
+  if (!shifts.length) { note.textContent = 'No planned shifts this week and no open no-specific-date shifts. ' + knockedPts.length + ' doors knocked so far (all shifts)'; if (knockedPts.length) dashMap.fitBounds(knockedPts,{padding:[24,24],maxZoom:16}); return; }
 
   shifts.forEach(function(key) {
     var day = canvassDays[key], isAny = key.indexOf('anytime') === 0;
@@ -269,24 +294,27 @@ function initDashMap() {
             if (seen[addrId]) return; seen[addrId] = true;
             var addr = byId[addrId]; if (!addr) return;
             var isDone = !!done[addrId];
-            var c = isDone ? '#9ca3af' : color;
+            counts[isAny?'anytime':'week']++;
+            if (isDone) return;                         // already drawn in the grey layer
+            var c = color;
             var icon = L.divIcon({className:'',html:'<div style="width:10px;height:10px;background:'+c+';border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);opacity:'+(isDone?.7:.9)+';"></div>',iconSize:[10,10],iconAnchor:[5,5]});
             L.marker([addr.lat,addr.lng],{icon:icon})
               .bindTooltip(esc(addr.n+' '+addr.s+(addr.u?' '+addr.u:''))+' — '+esc(label)+(isDone?' (knocked)':''))
               .addTo(dashMap);
             pts.push([addr.lat,addr.lng]);
-            counts[isAny?'anytime':'week']++;
           });
         });
       }).then(function() {
         pending--;
         if (!pending) {
-          if (pts.length) dashMap.fitBounds(pts, {padding:[24,24], maxZoom:16});
-          note.textContent = counts.week + ' doors planned this week · ' + counts.anytime + ' doors on no-specific-date routes';
+          var fit = pts.length ? pts : knockedPts;
+          if (fit.length) dashMap.fitBounds(fit, {padding:[24,24], maxZoom:16});
+          note.textContent = counts.week + ' doors planned this week · ' + counts.anytime + ' doors on no-specific-date routes · ' + knockedPts.length + ' doors knocked so far (all shifts)';
         }
       });
     });
   });
+  }
 }
 
 // ── COMPLETED SHIFT SUMMARY (closed or past shifts only)
