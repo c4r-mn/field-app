@@ -68,10 +68,16 @@
     <!-- Mini field map -->
     <div class="page-card">
       <div class="page-card-title">
-        Today's Field Activity
+        Planned Routes — Next 7 Days + No Specific Date
         <a href="/field-app/admin/field.html" class="btn btn-ghost btn-sm">Full Field View →</a>
       </div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:8px;">
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#D4A832;margin-right:5px;"></span>Planned this week</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3b82f6;margin-right:5px;"></span>Planned, no specific date</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#9ca3af;margin-right:5px;"></span>Already knocked</span>
+      </div>
       <div id="dash-map" style="height:320px;border-radius:8px;border:1px solid var(--border);"></div>
+      <div id="dash-map-note" style="font-size:12px;color:var(--subtle);margin-top:6px;"></div>
     </div>
 
     <!-- Upcoming shifts -->
@@ -83,6 +89,20 @@
       <div id="dash-shifts">
         <div style="color:var(--subtle);font-size:13px;">Loading shifts…</div>
       </div>
+    </div>
+
+    <!-- Completed shift summary -->
+    <div class="page-card">
+      <div class="page-card-title">
+        Completed Shifts — Doors Summary
+        <button class="btn btn-ghost btn-sm" onclick="downloadSummaryCSV()">Download CSV</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+        <label style="font-size:12px;font-weight:700;color:var(--muted);">Since</label>
+        <input type="date" id="sum-start" class="form-input" style="width:auto;padding:5px 10px;font-size:12px;" value="2026-09-26" onchange="loadSummary()">
+        <span style="font-size:12px;color:var(--subtle);">Closed and past shifts only. "Planned" = doors on the routes, whatever their result; "Logged" = doors with a recorded result.</span>
+      </div>
+      <div id="dash-summary"><div style="color:var(--subtle);font-size:13px;">Loading…</div></div>
     </div>
 
   </main>
@@ -99,7 +119,8 @@
 var dashMap = null;
 var roster = {};
 var canvassDays = {};
-var today = new Date().toISOString().slice(0,10);
+var today = (function(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 document.getElementById('dash-date').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
 
@@ -117,6 +138,7 @@ function loadDashboard() {
     renderShifts();
     loadStats();
     initDashMap();
+    loadSummary();
   });
 }
 
@@ -194,6 +216,21 @@ function loadStats() {
   });
 }
 
+function shiftHoods(day) {
+  return day.neighborhoods || (day.neighborhood ? [day.neighborhood] : []);
+}
+function addDaysStr(dateStr, n) {
+  var d = new Date(dateStr + 'T12:00:00'); d.setDate(d.getDate() + n);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function routeIdsOf(assignment) {
+  if (!assignment || typeof assignment !== 'object') return [];
+  if (Array.isArray(assignment.route)) return assignment.route;
+  var a = (assignment.assignments && typeof assignment.assignments === 'object') ? assignment.assignments : assignment;
+  return Object.keys(a).filter(function(k){ return k !== 'route' && k !== 'assignments'; });
+}
+
+// ── MAP: planned routes for the next 7 days + all open no-specific-date shifts
 function initDashMap() {
   dashMap = L.map('dash-map', {zoomControl:true}).setView([45.017,-93.153], 14);
   L.maplibreGL({
@@ -201,53 +238,146 @@ function initDashMap() {
     attribution:'&copy; OpenStreetMap &copy; CARTO'
   }).addTo(dashMap);
 
-  var COLORS = {'Not Home':'#64748b','Vacant':'#475569','For Sale':'#7c3aed',
-    'No Soliciting':'#92400e','Refused':'#c0392b','Accepted':'#27ae60','Other Language':'#2563eb','Skipped':'#ca8a04'};
+  var weekEnd = addDaysStr(today, 6);
+  var shifts = Object.keys(canvassDays).filter(function(key){
+    var day = canvassDays[key]; if (!day || day.closed) return false;
+    if (key.indexOf('anytime') === 0) return true;
+    var base = baseShiftDate(key);
+    return base >= today && base <= weekEnd;
+  });
 
-  (window.NEIGHBORHOODS||[]).forEach(function(n) {
-    Promise.all([
-      fbGet('/'+n.key+'/logs/'+today),
-      fbGet('/'+n.key+'/assignments/'+today)
-    ]).then(function(r) {
-      var dayLogs = r[0];
-      var dayAssigns = r[1];
-      var loggedIds = {};
+  var pts = [], counts = {week:0, anytime:0}, pending = 0;
+  var note = document.getElementById('dash-map-note');
+  if (!shifts.length) { note.textContent = 'No planned shifts this week and no open no-specific-date shifts.'; return; }
 
-      if (dayLogs) {
-        Object.values(dayLogs).forEach(function(volLogs) {
-          if (!volLogs) return;
-          Object.entries(volLogs).forEach(function(pair) {
-            var addrId = pair[0], log = pair[1];
-            loggedIds[addrId] = true;
-            var addr = (window.NEIGHBORHOOD_DATA[n.key]||[]).find(function(a){return a.id===addrId;});
-            if (!addr) return;
-            var color = COLORS[log.contact] || '#888';
-            var dot = log.wantContact ? '<div style="position:absolute;top:-4px;right:-4px;width:8px;height:8px;background:#D4A832;border-radius:50%;border:1px solid #fff;"></div>' : '';
-            var icon = L.divIcon({className:'',html:'<div style="position:relative;width:12px;height:12px;background:'+color+';border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);">'+dot+'</div>',iconSize:[12,12],iconAnchor:[6,6]});
+  shifts.forEach(function(key) {
+    var day = canvassDays[key], isAny = key.indexOf('anytime') === 0;
+    var color = isAny ? '#3b82f6' : '#D4A832';
+    var label = (day.notes || '') || formatDate(key);
+    shiftHoods(day).forEach(function(hk) {
+      pending++;
+      Promise.all([
+        fbGet('/'+hk+'/assignments/'+key).catch(function(){return null;}),
+        fbGet('/'+hk+'/logs/'+key).catch(function(){return null;})
+      ]).then(function(r) {
+        var assigns = r[0] || {}, logs = r[1] || {}, done = {}, byId = {};
+        Object.values(logs).forEach(function(vl){ if (vl && typeof vl === 'object') Object.keys(vl).forEach(function(id){ done[id] = true; }); });
+        (window.NEIGHBORHOOD_DATA[hk] || []).forEach(function(a){ byId[a.id] = a; });
+        var seen = {};
+        Object.keys(assigns).forEach(function(vid) {
+          routeIdsOf(assigns[vid]).forEach(function(addrId) {
+            if (seen[addrId]) return; seen[addrId] = true;
+            var addr = byId[addrId]; if (!addr) return;
+            var isDone = !!done[addrId];
+            var c = isDone ? '#9ca3af' : color;
+            var icon = L.divIcon({className:'',html:'<div style="width:10px;height:10px;background:'+c+';border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);opacity:'+(isDone?.7:.9)+';"></div>',iconSize:[10,10],iconAnchor:[5,5]});
             L.marker([addr.lat,addr.lng],{icon:icon})
-             .bindTooltip(addr.n+' '+addr.s+' - '+log.contact)
-             .addTo(dashMap);
+              .bindTooltip(esc(addr.n+' '+addr.s+(addr.u?' '+addr.u:''))+' — '+esc(label)+(isDone?' (knocked)':''))
+              .addTo(dashMap);
+            pts.push([addr.lat,addr.lng]);
+            counts[isAny?'anytime':'week']++;
           });
         });
-      }
-
-      // Show today's assigned-but-not-yet-knocked addresses in gold
-      if (dayAssigns) {
-        Object.values(dayAssigns).forEach(function(assignment) {
-          if (!assignment || !assignment.route) return;
-          assignment.route.forEach(function(addrId) {
-            if (loggedIds[addrId]) return;
-            var addr = (window.NEIGHBORHOOD_DATA[n.key]||[]).find(function(a){return a.id===addrId;});
-            if (!addr) return;
-            var icon = L.divIcon({className:'',html:'<div style="width:10px;height:10px;background:#D4A832;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);opacity:.8;"></div>',iconSize:[10,10],iconAnchor:[5,5]});
-            L.marker([addr.lat,addr.lng],{icon:icon})
-             .bindTooltip(addr.n+' '+addr.s+' - Assigned today, not yet knocked')
-             .addTo(dashMap);
-          });
-        });
-      }
+      }).then(function() {
+        pending--;
+        if (!pending) {
+          if (pts.length) dashMap.fitBounds(pts, {padding:[24,24], maxZoom:16});
+          note.textContent = counts.week + ' doors planned this week · ' + counts.anytime + ' doors on no-specific-date routes';
+        }
+      });
     });
   });
+}
+
+// ── COMPLETED SHIFT SUMMARY (closed or past shifts only)
+var summaryRows = [];
+var SUM_RESULTS = ['Accepted','Not Home','Refused','No Soliciting','Skipped'];
+
+function loadSummary() {
+  var start = document.getElementById('sum-start').value || '2026-09-26';
+  var el = document.getElementById('dash-summary');
+  el.innerHTML = '<div style="color:var(--subtle);font-size:13px;">Loading…</div>';
+  // Shift "date": real date for dated shifts; for no-specific-date shifts, the
+  // date of their most recent logged door (falls back to when they were created).
+  var candidates = Object.keys(canvassDays).filter(function(key){
+    var day = canvassDays[key]; if (!day) return false;
+    var isAny = key.indexOf('anytime') === 0;
+    if (isAny) return !!day.closed;                         // no-date shifts finish only when closed
+    var base = baseShiftDate(key);
+    return (day.closed || base < today) && base >= start;
+  });
+
+  Promise.all(candidates.map(function(key) {
+    var day = canvassDays[key], hoods = shiftHoods(day);
+    return Promise.all(hoods.map(function(hk){
+      return Promise.all([
+        fbGet('/'+hk+'/assignments/'+key).catch(function(){return null;}),
+        fbGet('/'+hk+'/logs/'+key).catch(function(){return null;})
+      ]);
+    })).then(function(per) {
+      var planned = {}, logged = {}, res = {}, latest = '';
+      per.forEach(function(r) {
+        var assigns = r[0] || {}, logs = r[1] || {};
+        Object.keys(assigns).forEach(function(vid){ routeIdsOf(assigns[vid]).forEach(function(id){ planned[id] = true; }); });
+        Object.values(logs).forEach(function(vl) {
+          if (!vl || typeof vl !== 'object') return;
+          Object.keys(vl).forEach(function(id) {
+            var e = vl[id]; if (!e || !e.contact) return;
+            if (!logged[id]) { logged[id] = true; var k = SUM_RESULTS.indexOf(e.contact) !== -1 ? e.contact : 'Other'; res[k] = (res[k]||0) + 1; }
+            if (e.time && e.time > latest) latest = e.time;
+          });
+        });
+      });
+      var isAny = key.indexOf('anytime') === 0;
+      var when = isAny ? (latest ? latest.slice(0,10) : (day.created||'').slice(0,10)) : baseShiftDate(key);
+      var hoodNames = hoods.map(function(hk){ var h=(window.NEIGHBORHOODS||[]).find(function(n){return n.key===hk;}); return h?h.displayName:hk; }).join(' + ');
+      // every planned door counts, plus any logged door that wasn't on a saved route
+      var allIds = Object.assign({}, planned, logged);
+      return {key:key, when:when, isAny:isAny, hood:hoodNames, notes:day.notes||'', vols:(day.volunteers||[]).map(volName).join(', '),
+              planned:Object.keys(allIds).length, logged:Object.keys(logged).length, res:res};
+    });
+  })).then(function(rows) {
+    summaryRows = rows.filter(function(r){ return r.when >= start && (r.planned > 0 || r.logged > 0); })  // shifts with nothing planned or logged were missed, not completed
+      .sort(function(a,b){ return a.when < b.when ? 1 : a.when > b.when ? -1 : 0; });
+    renderSummary();
+  }).catch(function(){ el.innerHTML = '<div style="color:var(--red);font-size:13px;">Could not load the summary — please refresh.</div>'; });
+}
+
+function renderSummary() {
+  var el = document.getElementById('dash-summary');
+  if (!summaryRows.length) { el.innerHTML = '<div style="color:var(--subtle);font-size:13px;">No closed or past shifts on or after that date.</div>'; return; }
+  var tot = {planned:0, logged:0, res:{}};
+  summaryRows.forEach(function(r){ tot.planned += r.planned; tot.logged += r.logged; Object.keys(r.res).forEach(function(k){ tot.res[k]=(tot.res[k]||0)+r.res[k]; }); });
+  var cols = SUM_RESULTS.concat(['Other']);
+  var th = 'text-align:right;padding:6px 8px;font-size:11px;color:var(--muted);white-space:nowrap;';
+  var td = 'text-align:right;padding:6px 8px;font-size:13px;';
+  var html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;">' +
+    '<thead><tr style="border-bottom:2px solid var(--border);"><th style="text-align:left;padding:6px 8px;font-size:11px;color:var(--muted);">Shift</th>' +
+    '<th style="'+th+'">Planned</th><th style="'+th+'">Logged</th>' + cols.map(function(c){ return '<th style="'+th+'">'+c+'</th>'; }).join('') + '</tr></thead><tbody>' +
+    summaryRows.map(function(r) {
+      return '<tr style="border-bottom:1px solid var(--border);cursor:pointer;" onclick="location.href=\'/field-app/admin/shift.html?date='+encodeURIComponent(r.key)+'\'">' +
+        '<td style="padding:6px 8px;font-size:13px;"><div style="font-weight:700;">'+esc(r.hood)+(r.notes?' · '+esc(r.notes):'')+'</div>' +
+        '<div style="font-size:11px;color:var(--subtle);">'+(r.isAny?'No specific date · last knocked '+esc(r.when):esc(formatDate(r.key)))+(r.vols?' · '+esc(r.vols):'')+'</div></td>' +
+        '<td style="'+td+'font-weight:700;">'+r.planned+'</td><td style="'+td+'">'+r.logged+'</td>' +
+        cols.map(function(c){ return '<td style="'+td+'">'+(r.res[c]||0)+'</td>'; }).join('') + '</tr>';
+    }).join('') +
+    '</tbody><tfoot><tr style="border-top:2px solid var(--border);font-weight:800;"><td style="padding:8px;font-size:13px;">Total — '+summaryRows.length+' shifts</td>' +
+    '<td style="'+td+'">'+tot.planned+'</td><td style="'+td+'">'+tot.logged+'</td>' + cols.map(function(c){ return '<td style="'+td+'">'+(tot.res[c]||0)+'</td>'; }).join('') + '</tr></tfoot></table></div>';
+  el.innerHTML = html;
+}
+
+function downloadSummaryCSV() {
+  if (!summaryRows.length) { return; }
+  var cols = SUM_RESULTS.concat(['Other']);
+  function q(v){ return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'; }
+  var lines = [['Date','Type','Neighborhood','Notes','Canvassers','Planned Doors','Logged Doors'].concat(cols).map(q).join(',')];
+  summaryRows.forEach(function(r){
+    lines.push([r.when, r.isAny?'No specific date':'Dated', r.hood, r.notes, r.vols, r.planned, r.logged].concat(cols.map(function(c){return r.res[c]||0;})).map(q).join(','));
+  });
+  var blob = new Blob([lines.join('\n')], {type:'text/csv'});
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'c4r-completed-shifts-since-'+(document.getElementById('sum-start').value||'')+'.csv';
+  document.body.appendChild(a); a.click(); a.remove();
 }
 </script>
 </body>
