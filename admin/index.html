@@ -65,6 +65,11 @@
       <div class="stat-card"><div class="stat-n" id="stat-volunteers">—</div><div class="stat-l">Volunteers</div></div>
     </div>
 
+    <div id="stat-note" style="font-size:12px;color:var(--subtle);margin:-8px 0 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span id="stat-asof">Totals not loaded yet.</span>
+      <button class="btn btn-ghost btn-sm" id="stat-refresh" onclick="refreshStats()">Load totals</button>
+    </div>
+
     <!-- Mini field map -->
     <div class="page-card">
       <div class="page-card-title">
@@ -198,31 +203,46 @@ function renderShifts() {
   }).join('');
 }
 
+var STATS_KEY = 'c4rDashStats_v1';
+function showStats(st) {
+  document.getElementById('stat-doors').textContent = st.doors;
+  document.getElementById('stat-accepted').textContent = st.accepted;
+  document.getElementById('stat-contact').textContent = st.contact;
+  document.getElementById('stat-signs').textContent = st.signs;
+  document.getElementById('stat-nosolic').textContent = st.nosolic;
+  document.getElementById('stat-asof').textContent = 'Totals as of ' + new Date(st.at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) + '.';
+  document.getElementById('stat-refresh').textContent = 'Refresh totals';
+}
 function loadStats() {
+  // Volunteer count is cheap (roster already loaded). The door totals need every
+  // neighborhood's full history, so show the last saved numbers instantly and only
+  // re-download when "Refresh totals" is clicked.
+  document.getElementById('stat-volunteers').textContent = Object.values(roster).filter(function(v){return v.status==='active';}).length;
+  try { var c = JSON.parse(localStorage.getItem(STATS_KEY) || 'null'); if (c && c.at) showStats(c); } catch(e) {}
+}
+function refreshStats() {
+  var btn = document.getElementById('stat-refresh');
+  btn.disabled = true; btn.textContent = 'Loading…';
   loadAllLogs().then(function(byHood) {
-    var results = Object.values(byHood);
-    var doors=0, accepted=0, contact=0, signs=0, nosolic=0;
-    results.forEach(function(hoodLogs) {
+    var st = {doors:0, accepted:0, contact:0, signs:0, nosolic:0, at: Date.now()};
+    Object.values(byHood).forEach(function(hoodLogs) {
       if (!hoodLogs) return;
       Object.values(hoodLogs).forEach(function(dayLogs) {
-        Object.values(dayLogs).forEach(function(volLogs) {
-          Object.values(volLogs).forEach(function(log) {
-            doors++;
-            if (log.contact==='Accepted') accepted++;
-            if (log.wantContact) contact++;
-            if (log.wantSign) signs++;
-            if (log.contact==='No Soliciting') nosolic++;
+        Object.values(dayLogs || {}).forEach(function(volLogs) {
+          Object.values(volLogs || {}).forEach(function(log) {
+            st.doors++;
+            if (log.contact==='Accepted') st.accepted++;
+            if (log.wantContact) st.contact++;
+            if (log.wantSign) st.signs++;
+            if (log.contact==='No Soliciting') st.nosolic++;
           });
         });
       });
     });
-    document.getElementById('stat-doors').textContent = doors;
-    document.getElementById('stat-accepted').textContent = accepted;
-    document.getElementById('stat-contact').textContent = contact;
-    document.getElementById('stat-signs').textContent = signs;
-    document.getElementById('stat-nosolic').textContent = nosolic;
-    document.getElementById('stat-volunteers').textContent = Object.values(roster).filter(function(v){return v.status==='active';}).length;
-  });
+    try { localStorage.setItem(STATS_KEY, JSON.stringify(st)); } catch(e) {}
+    showStats(st); btn.disabled = false;
+    _allLogsPromise = null;   // don't keep the big download in memory
+  }).catch(function(){ btn.disabled = false; btn.textContent = 'Retry'; });
 }
 
 function shiftHoods(day) {
@@ -308,60 +328,73 @@ function initDashMap() {
 // ── COMPLETED SHIFT SUMMARY (closed or past shifts only)
 var summaryRows = [];
 var SUM_RESULTS = ['Accepted','Not Home','Refused','No Soliciting','Skipped'];
+var SUM_PAGE = 10;
+var sumKeys = [], sumCache = {}, sumShown = SUM_PAGE, sumStart = '';
 
-function loadSummary() {
-  var start = document.getElementById('sum-start').value || '2026-09-26';
-  var el = document.getElementById('dash-summary');
-  el.innerHTML = '<div style="color:var(--subtle);font-size:13px;">Loading…</div>';
-  // Shift "date": real date for dated shifts; for no-specific-date shifts, the
-  // date of their most recent logged door (falls back to when they were created).
-  var candidates = Object.keys(canvassDays).filter(function(key){
-    var day = canvassDays[key]; if (!day) return false;
-    var isAny = key.indexOf('anytime') === 0;
-    if (isAny) return !!day.closed;                         // no-date shifts finish only when closed
-    var base = baseShiftDate(key);
-    return (day.closed || base < today) && base >= start;
-  });
-
-  Promise.all(candidates.map(function(key) {
-    var day = canvassDays[key], hoods = shiftHoods(day);
-    return Promise.all(hoods.map(function(hk){
-      return Promise.all([
-        fbGet('/'+hk+'/assignments/'+key).catch(function(){return null;}),
-        loadAllLogs().then(function(t){ return ((t[hk]||{})[key]) || null; })
-      ]);
-    })).then(function(per) {
-      var planned = {}, logged = {}, res = {}, latest = '';
-      per.forEach(function(r) {
-        var assigns = r[0] || {}, logs = r[1] || {};
-        Object.keys(assigns).forEach(function(vid){ routeIdsOf(assigns[vid]).forEach(function(id){ planned[id] = true; }); });
-        Object.values(logs).forEach(function(vl) {
-          if (!vl || typeof vl !== 'object') return;
-          Object.keys(vl).forEach(function(id) {
-            var e = vl[id]; if (!e || !e.contact) return;
-            if (!logged[id]) { logged[id] = true; var k = SUM_RESULTS.indexOf(e.contact) !== -1 ? e.contact : 'Other'; res[k] = (res[k]||0) + 1; }
-            if (e.time && e.time > latest) latest = e.time;
-          });
+function fetchSummaryRow(key) {
+  if (sumCache[key]) return Promise.resolve(sumCache[key]);
+  var day = canvassDays[key], hoods = shiftHoods(day);
+  return Promise.all(hoods.map(function(hk){
+    return Promise.all([
+      fbGet('/'+hk+'/assignments/'+key).catch(function(){return null;}),
+      fbGet('/'+hk+'/logs/'+key).catch(function(){return null;})
+    ]);
+  })).then(function(per) {
+    var planned = {}, logged = {}, res = {}, latest = '';
+    per.forEach(function(r) {
+      var assigns = r[0] || {}, logs = r[1] || {};
+      Object.keys(assigns).forEach(function(vid){ routeIdsOf(assigns[vid]).forEach(function(id){ planned[id] = true; }); });
+      Object.values(logs).forEach(function(vl) {
+        if (!vl || typeof vl !== 'object') return;
+        Object.keys(vl).forEach(function(id) {
+          var e = vl[id]; if (!e || !e.contact) return;
+          if (!logged[id]) { logged[id] = true; var k = SUM_RESULTS.indexOf(e.contact) !== -1 ? e.contact : 'Other'; res[k] = (res[k]||0) + 1; }
+          if (e.time && e.time > latest) latest = e.time;
         });
       });
-      var isAny = key.indexOf('anytime') === 0;
-      var when = isAny ? (latest ? latest.slice(0,10) : (day.created||'').slice(0,10)) : baseShiftDate(key);
-      var hoodNames = hoods.map(function(hk){ var h=(window.NEIGHBORHOODS||[]).find(function(n){return n.key===hk;}); return h?h.displayName:hk; }).join(' + ');
-      // every planned door counts, plus any logged door that wasn't on a saved route
-      var allIds = Object.assign({}, planned, logged);
-      return {key:key, when:when, isAny:isAny, hood:hoodNames, notes:day.notes||'', vols:(day.volunteers||[]).map(volName).join(', '),
-              planned:Object.keys(allIds).length, logged:Object.keys(logged).length, res:res};
     });
-  })).then(function(rows) {
-    summaryRows = rows.filter(function(r){ return r.when >= start && (r.planned > 0 || r.logged > 0); })  // shifts with nothing planned or logged were missed, not completed
+    var isAny = key.indexOf('anytime') === 0;
+    var when = isAny ? (latest ? latest.slice(0,10) : (day.created||'').slice(0,10)) : baseShiftDate(key);
+    var hoodNames = hoods.map(function(hk){ var h=(window.NEIGHBORHOODS||[]).find(function(n){return n.key===hk;}); return h?h.displayName:hk; }).join(' + ');
+    var allIds = Object.assign({}, planned, logged);   // every door on the route, plus any logged off-route
+    return (sumCache[key] = {key:key, when:when, isAny:isAny, hood:hoodNames, notes:day.notes||'', vols:(day.volunteers||[]).map(volName).join(', '),
+            planned:Object.keys(allIds).length, logged:Object.keys(logged).length, res:res});
+  });
+}
+
+// Closed / past shifts only, newest first. Only the first page is downloaded;
+// "Load more" pulls the next ones so the dashboard stays quick.
+function sortDateOf(key) {
+  var day = canvassDays[key] || {};
+  if (key.indexOf('anytime') === 0) return (day.created || '').slice(0,10) || '0000-00-00';
+  return baseShiftDate(key);
+}
+function loadSummary() {
+  sumStart = document.getElementById('sum-start').value || '2026-09-26';
+  sumShown = SUM_PAGE;
+  sumKeys = Object.keys(canvassDays).filter(function(key){
+    var day = canvassDays[key]; if (!day) return false;
+    if (key.indexOf('anytime') === 0) return !!day.closed;      // no-date shifts finish only when closed
+    var base = baseShiftDate(key);
+    return (day.closed || base < today) && base >= sumStart;
+  }).sort(function(a,b){ var x=sortDateOf(a), y=sortDateOf(b); return x<y?1:x>y?-1:0; });
+  fillSummary();
+}
+function fillSummary() {
+  var el = document.getElementById('dash-summary');
+  var want = sumKeys.slice(0, sumShown);
+  if (want.some(function(k){ return !sumCache[k]; })) el.innerHTML = '<div style="color:var(--subtle);font-size:13px;">Loading…</div>';
+  return Promise.all(want.map(fetchSummaryRow)).then(function(rows) {
+    summaryRows = rows.filter(function(r){ return r.when >= sumStart && (r.planned > 0 || r.logged > 0); })  // nothing planned or logged = missed, not completed
       .sort(function(a,b){ return a.when < b.when ? 1 : a.when > b.when ? -1 : 0; });
     renderSummary();
   }).catch(function(){ el.innerHTML = '<div style="color:var(--red);font-size:13px;">Could not load the summary — please refresh.</div>'; });
 }
+function loadMoreSummary(all) { sumShown = all ? sumKeys.length : sumShown + SUM_PAGE; return fillSummary(); }
 
 function renderSummary() {
   var el = document.getElementById('dash-summary');
-  if (!summaryRows.length) { el.innerHTML = '<div style="color:var(--subtle);font-size:13px;">No closed or past shifts on or after that date.</div>'; return; }
+  if (!summaryRows.length) { el.innerHTML = '<div style="color:var(--subtle);font-size:13px;">No closed or past shifts on or after that date.</div>' + (sumKeys.length > sumShown ? '<button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="loadMoreSummary()">Load more</button>' : ''); return; }
   var tot = {planned:0, logged:0, res:{}};
   summaryRows.forEach(function(r){ tot.planned += r.planned; tot.logged += r.logged; Object.keys(r.res).forEach(function(k){ tot.res[k]=(tot.res[k]||0)+r.res[k]; }); });
   var cols = SUM_RESULTS.concat(['Other']);
@@ -379,10 +412,13 @@ function renderSummary() {
     }).join('') +
     '</tbody><tfoot><tr style="border-top:2px solid var(--border);font-weight:800;"><td style="padding:8px;font-size:13px;">Total — '+summaryRows.length+' shifts</td>' +
     '<td style="'+td+'">'+tot.planned+'</td><td style="'+td+'">'+tot.logged+'</td>' + cols.map(function(c){ return '<td style="'+td+'">'+(tot.res[c]||0)+'</td>'; }).join('') + '</tr></tfoot></table></div>';
+  var left = sumKeys.length - Math.min(sumShown, sumKeys.length);
+  if (left > 0) html += '<div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap;"><button class="btn btn-ghost btn-sm" onclick="loadMoreSummary()">Load '+Math.min(SUM_PAGE,left)+' more</button><button class="btn btn-ghost btn-sm" onclick="loadMoreSummary(true)">Load all</button><span style="font-size:12px;color:var(--subtle);">'+left+' older shift'+(left===1?'':'s')+' not loaded — totals above cover loaded shifts only</span></div>';
   el.innerHTML = html;
 }
 
 function downloadSummaryCSV() {
+  if (sumShown < sumKeys.length) { loadMoreSummary(true).then(downloadSummaryCSV); return; }   // export covers every shift
   if (!summaryRows.length) { return; }
   var cols = SUM_RESULTS.concat(['Other']);
   function q(v){ return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'; }
