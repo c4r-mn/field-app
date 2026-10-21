@@ -142,6 +142,19 @@ function loadDashboard() {
   });
 }
 
+// Every neighborhood's full logs tree is fetched ONCE and shared by the stats,
+// the map's grey layer and the completed-shifts summary (previously each
+// did its own full download).
+var _allLogsPromise = null;
+function loadAllLogs() {
+  if (!_allLogsPromise) {
+    _allLogsPromise = Promise.all((window.NEIGHBORHOODS||[]).map(function(n){
+      return fbGet('/'+n.key+'/logs').catch(function(){return null;}).then(function(d){ return [n.key, d]; });
+    })).then(function(pairs){ var o = {}; pairs.forEach(function(p){ o[p[0]] = p[1]; }); return o; });
+  }
+  return _allLogsPromise;
+}
+
 function volName(id) {
   return roster[id] ? roster[id].name : id;
 }
@@ -187,11 +200,8 @@ function renderShifts() {
 }
 
 function loadStats() {
-  // Load all logs across all neighborhoods and dates
-  var promises = (window.NEIGHBORHOODS||[]).map(function(n) {
-    return fbGet('/'+n.key+'/logs').catch(function(){return null;});
-  });
-  Promise.all(promises).then(function(results) {
+  loadAllLogs().then(function(byHood) {
+    var results = Object.values(byHood);
     var doors=0, accepted=0, contact=0, signs=0, nosolic=0;
     results.forEach(function(hoodLogs) {
       if (!hoodLogs) return;
@@ -241,9 +251,9 @@ function initDashMap() {
   // Layer 1: every door ever logged, in grey (canvas-rendered so thousands stay fast)
   var canvasR = L.canvas({padding:0.5});
   var knockedPts = [], knockedSeen = {};
-  var knockedDone = Promise.all((window.NEIGHBORHOODS||[]).map(function(n){
-    return fbGet('/'+n.key+'/logs').catch(function(){return null;}).then(function(all){
-      if (!all) return;
+  var knockedDone = loadAllLogs().then(function(byHood){
+    (window.NEIGHBORHOODS||[]).forEach(function(n){
+      var all = byHood[n.key]; if (!all) return;
       var byId = {}; (window.NEIGHBORHOOD_DATA[n.key]||[]).forEach(function(a){ byId[a.id]=a; });
       Object.values(all).forEach(function(byVol){
         if (!byVol || typeof byVol !== 'object') return;
@@ -259,7 +269,7 @@ function initDashMap() {
         });
       });
     });
-  }));
+  });
   knockedDone.then(drawPlanned);
 
   function drawPlanned() {
@@ -283,9 +293,9 @@ function initDashMap() {
       pending++;
       Promise.all([
         fbGet('/'+hk+'/assignments/'+key).catch(function(){return null;}),
-        fbGet('/'+hk+'/logs/'+key).catch(function(){return null;})
+        loadAllLogs()
       ]).then(function(r) {
-        var assigns = r[0] || {}, logs = r[1] || {}, done = {}, byId = {};
+        var assigns = r[0] || {}, logs = ((r[1][hk] || {})[key]) || {}, done = {}, byId = {};
         Object.values(logs).forEach(function(vl){ if (vl && typeof vl === 'object') Object.keys(vl).forEach(function(id){ done[id] = true; }); });
         (window.NEIGHBORHOOD_DATA[hk] || []).forEach(function(a){ byId[a.id] = a; });
         var seen = {};
@@ -340,7 +350,7 @@ function loadSummary() {
     return Promise.all(hoods.map(function(hk){
       return Promise.all([
         fbGet('/'+hk+'/assignments/'+key).catch(function(){return null;}),
-        fbGet('/'+hk+'/logs/'+key).catch(function(){return null;})
+        loadAllLogs().then(function(t){ return ((t[hk]||{})[key]) || null; })
       ]);
     })).then(function(per) {
       var planned = {}, logged = {}, res = {}, latest = '';
