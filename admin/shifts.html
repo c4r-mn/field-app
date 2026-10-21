@@ -108,7 +108,7 @@
     </div>
 
     <!-- Upcoming view -->
-    <div id="orphan-routes" style="display:none;"></div>
+    <div id="orphan-routes"></div>
     <div id="view-upcoming">
       <div class="page-card">
         <div class="shift-subsection">
@@ -177,7 +177,7 @@ function loadShifts() {
     try { savedView = localStorage.getItem('c4rShiftsView') || 'upcoming'; } catch(e) {}
     setView(savedView);
     renderShifts();
-    findOrphanRoutes();
+    renderOrphanRoutes();   // just the on-demand check button — the full scan is heavy, so it only runs when clicked
     buildNewForm();
     // Auto-open new form if ?new=1
     if (window.location.search.indexOf('new=1') !== -1) toggleNewForm();
@@ -487,7 +487,11 @@ function renderShifts() {
 // View still shows those doors as "upcoming", so surface them here and let
 // the admin restore the shift around them.
 var orphanRoutes = {};
+var orphanScanned = false;
 function findOrphanRoutes() {
+  var el0 = document.getElementById('orphan-routes');
+  el0.style.display = 'block';
+  el0.innerHTML = '<div style="font-size:12px;color:var(--subtle);margin-bottom:12px;">Scanning routes…</div>';
   var hoods = (window.NEIGHBORHOODS || []).map(function(n){ return n.key; });
   Promise.all(hoods.map(function(h){
     return Promise.all([fbGet('/'+h+'/assignments').catch(function(){return null;}), fbGet('/'+h+'/buckets').catch(function(){return null;})]);
@@ -524,13 +528,20 @@ function findOrphanRoutes() {
         });
       });
     });
+    orphanScanned = true;
     renderOrphanRoutes();
   });
 }
 function renderOrphanRoutes() {
   var el = document.getElementById('orphan-routes');
   var keys = Object.keys(orphanRoutes);
-  if (!keys.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  if (!keys.length) {
+    el.style.display = 'block';
+    el.innerHTML = '<div style="margin-bottom:12px;font-size:12px;color:var(--subtle);">' +
+      (orphanScanned ? 'No routes without a shift found. ' : '') +
+      '<button class="btn btn-ghost btn-sm" onclick="findOrphanRoutes()">' + (orphanScanned ? 'Check again' : 'Check for routes without a shift') + '</button></div>';
+    return;
+  }
   var hoodName = function(k){ var h=(window.NEIGHBORHOODS||[]).find(function(n){return n.key===k;}); return h?h.displayName:k; };
   el.style.display = 'block';
   el.innerHTML = '<div class="page-card" style="border:2px solid #c0392b;margin-bottom:16px;">' +
@@ -577,7 +588,7 @@ function deleteShift(date) {
   delete canvassDays[date];
   Promise.all([fbPut('/canvass-days/'+date, null), clearRoutesFor(date, hoods)]).then(function() {
     hoods.forEach(function(h){ delete assignmentsByPath[h+'|'+date]; delete bucketsByPath[h+'|'+date]; });
-    renderShifts(); findOrphanRoutes(); showToast('Shift deleted');
+    renderShifts(); showToast('Shift deleted');
   }).catch(function(){ showToast('Delete failed — please retry'); });
 }
 
