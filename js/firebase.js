@@ -24,12 +24,19 @@ function fbFetch(path, opts) {
     setTimeout(function() { resolve(null); }, 8000);
   });
 
+  var query = '', qi = path.indexOf('?');
+  if (qi !== -1) { query = path.slice(qi); path = path.slice(0, qi); }   // e.g. ?shallow=true
+  if (opts && opts.method && opts.method !== 'GET' && typeof c4rCacheInvalidate === 'function') c4rCacheInvalidate(path);
   return Promise.race([tokenPromise, timeoutPromise]).then(function(token) {
-    var url = fbBase + path + '.json';
+    var url = fbBase + path + '.json' + query;
     if (token) {
       url += (url.indexOf('?') === -1 ? '?' : '&') + 'auth=' + encodeURIComponent(token);
     }
-    return fetch(url, opts || {});
+    var p = fetch(url, opts || {});
+    if (opts && opts.method && opts.method !== 'GET' && typeof c4rCacheInvalidate === 'function') {
+      p = p.then(function(r) { c4rCacheInvalidate(path); return r; });   // again after it lands, in case a read raced in
+    }
+    return p;
   });
 }
 function fbGet(path) {
