@@ -134,6 +134,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.20/leaflet-maplibre-gl.js"></script>
 <script src="/field-app/js/firebase.js"></script>
+<script src="/field-app/js/cache.js"></script>
 <script src="/field-app/js/auth.js"></script>
 <script src="/field-app/js/data.js"></script>
 <script>
@@ -333,39 +334,8 @@ initAuth(
   function(user) { window.location.href = '/field-app/canvass.html'; }
 );
 
-function loadFieldData() {
-  setFbBase();
-  Promise.all([
-    fbGet('/roster'),
-    fbGet('/canvass-days')
-  ].concat((window.NEIGHBORHOODS||[]).map(function(n){
-    return Promise.all([fbGet('/'+n.key+'/logs'), fbGet('/'+n.key+'/assignments')])
-      .then(function(r){ return {key:n.key, logs:r[0], assignments:r[1]}; });
-  }))).then(function(results) {
-    roster = results[0] || {};
-    canvassDays = results[1] || {};
-    var hoodResults = results.slice(2);
-
-    var hoodList = document.getElementById('hood-ms-list');
-    if (hoodList) {
-      (window.NEIGHBORHOODS||[]).forEach(function(n) {
-        var label = document.createElement('label');
-        label.className = 'hood-ms-option';
-        label.innerHTML = '<input type="checkbox" class="hood-ms-item" data-key="'+n.key+'" onchange="toggleHoodOption(\''+n.key+'\', this.checked)"> '+n.displayName;
-        hoodList.appendChild(label);
-      });
-      // Default to just the first neighborhood — "All Neighborhoods" with
-      // 14,000+ addresses is slow; most days you're working one area. Check
-      // more boxes any time you actually want a combined view.
-      if (window.NEIGHBORHOODS && window.NEIGHBORHOODS.length) {
-        activeHoods = new Set([window.NEIGHBORHOODS[0].key]);
-        var firstCb = hoodList.querySelector('.hood-ms-item[data-key="'+window.NEIGHBORHOODS[0].key+'"]');
-        if (firstCb) firstCb.checked = true;
-      }
-      updateHoodButtonLabel();
-    }
-
-    hoodResults.forEach(function(hood) {
+var loadedHoods = {};
+function ingestHood(hood) {
       var logs = hood.logs || {};
       var assigns = hood.assignments || {};
       Object.entries(logs).forEach(function(datePair) {
@@ -393,11 +363,57 @@ function loadFieldData() {
           });
         });
       });
-    });
+}
 
+// Only neighborhoods that are ticked are downloaded; settled shifts' logs come from the
+// browser cache, so after the first visit this fetches just new and open shifts.
+function ensureHoodsLoaded(keys) {
+  var todo = keys.filter(function(k){ return !loadedHoods[k]; });
+  if (!todo.length) return Promise.resolve();
+  todo.forEach(function(k){ loadedHoods[k] = true; });
+  return Promise.all(todo.map(function(k) {
+    return Promise.all([
+      fbHoodLogs(k, canvassDays),
+      fbShiftKeys(k, 'assignments').then(function(ak) {
+        var upcoming = ak.filter(function(d){ return baseShiftDate(d) >= today; });   // past routes are never "upcoming"
+        var out = {};
+        return Promise.all(upcoming.map(function(d){ return fbGet('/'+k+'/assignments/'+d).then(function(v){ if (v) out[d] = v; }); })).then(function(){ return out; });
+      })
+    ]).then(function(r){ ingestHood({key:k, logs:r[0], assignments:r[1]}); })
+      .catch(function(e){ loadedHoods[k] = false; throw e; });
+  })).then(function() {
     buildDateOptions();
-    document.getElementById('field-sub').textContent =
-      Object.keys(allLogs).length + ' doors logged across all shifts';
+    document.getElementById('field-sub').textContent = Object.keys(allLogs).length + ' doors logged in the selected neighborhoods';
+  });
+}
+
+function loadFieldData() {
+  setFbBase();
+  Promise.all([fbGetTTL('/roster', 120000), fbGetTTL('/canvass-days', 120000)]).then(function(results) {
+    roster = results[0] || {};
+    canvassDays = results[1] || {};
+
+    var hoodList = document.getElementById('hood-ms-list');
+    if (hoodList) {
+      (window.NEIGHBORHOODS||[]).forEach(function(n) {
+        var label = document.createElement('label');
+        label.className = 'hood-ms-option';
+        label.innerHTML = '<input type="checkbox" class="hood-ms-item" data-key="'+n.key+'" onchange="toggleHoodOption(\''+n.key+'\', this.checked)"> '+n.displayName;
+        hoodList.appendChild(label);
+      });
+      // Default to just the first neighborhood — "All Neighborhoods" with
+      // 14,000+ addresses is slow; most days you're working one area. Check
+      // more boxes any time you actually want a combined view.
+      if (window.NEIGHBORHOODS && window.NEIGHBORHOODS.length) {
+        activeHoods = new Set([window.NEIGHBORHOODS[0].key]);
+        var firstCb = hoodList.querySelector('.hood-ms-item[data-key="'+window.NEIGHBORHOODS[0].key+'"]');
+        if (firstCb) firstCb.checked = true;
+      }
+      updateHoodButtonLabel();
+    }
+
+    return ensureHoodsLoaded(Array.from(activeHoods));
+  }).then(function() {
     initFieldMap();
   }).catch(function(e) {
     document.getElementById('field-sub').textContent = 'Error: ' + e.message;
@@ -473,6 +489,7 @@ function toggleHoodAll(checked) {
   mapNeedsFit = true;
   updateHoodButtonLabel();
   refreshFieldMarkers();
+  ensureHoodsLoaded(Array.from(activeHoods)).then(refreshFieldMarkers);
 }
 
 function toggleHoodOption(key, checked) {
@@ -482,6 +499,7 @@ function toggleHoodOption(key, checked) {
   mapNeedsFit = true;
   updateHoodButtonLabel();
   refreshFieldMarkers();
+  if (checked) ensureHoodsLoaded([key]).then(refreshFieldMarkers);
 }
 
 function updateHoodButtonLabel() {

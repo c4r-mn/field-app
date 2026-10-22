@@ -142,6 +142,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" crossorigin="anonymous"></script>
 <script src="/field-app/js/firebase.js"></script>
+<script src="/field-app/js/cache.js"></script>
 <script src="/field-app/js/auth.js"></script>
 <script src="/field-app/js/data.js"></script>
 <script>
@@ -168,7 +169,7 @@ initAuth(
 
 function loadShifts() {
   setFbBase();
-  Promise.all([fbGet('/roster'), fbGet('/canvass-days')]).then(function(r) {
+  Promise.all([fbGetTTL('/roster', 120000), fbGetTTL('/canvass-days', 120000)]).then(function(r) {
     roster = r[0] || {};
     canvassDays = r[1] || {};
     return loadPlanningStatus();
@@ -187,21 +188,26 @@ function loadShifts() {
 // Fetches, once, every neighborhood/date's buckets and real route
 // assignments the current set of shifts could possibly reference, so
 // computeShiftStatus() below can run synchronously against local data.
-function loadPlanningStatus() {
-  var days = Object.entries(canvassDays);
+var pastPlanLoaded = false;
+function loadPlanningStatus(includePast) {
+  // Upcoming shifts are fetched on page load. Past/closed shifts (the bulk of the
+  // requests) are fetched only when the Past tab is opened, and only once.
+  if (includePast) pastPlanLoaded = true;
   var pathSet = {};
-  days.forEach(function(pair) {
+  Object.entries(canvassDays).forEach(function(pair) {
     var date = pair[0], day = pair[1];
+    var isPast = day.closed || date < today;
+    if (isPast && !pastPlanLoaded) return;
     var hoods = day.neighborhoods || (day.neighborhood ? [day.neighborhood] : []);
-    hoods.forEach(function(hoodKey) { pathSet[hoodKey+'|'+date] = true; });
+    hoods.forEach(function(hoodKey) { var k = hoodKey+'|'+date; if (!(k in assignmentsByPath)) pathSet[k] = true; });
   });
   var keys = Object.keys(pathSet);
   if (!keys.length) return Promise.resolve();
   return Promise.all(keys.map(function(key) {
     var parts = key.split('|'), hoodKey = parts[0], date = parts[1];
     return Promise.all([
-      fbGet('/'+hoodKey+'/buckets/'+date),
-      fbGet('/'+hoodKey+'/assignments/'+date)
+      fbGetShiftCached(hoodKey,'buckets',date,canvassDays),
+      fbGetShiftCached(hoodKey,'assignments',date,canvassDays)
     ]).then(function(res) {
       bucketsByPath[key] = res[0] || {};
       assignmentsByPath[key] = res[1] || {};
@@ -326,6 +332,10 @@ function saveNewShift() {
 }
 
 function setView(view) {
+  if (view === 'past' && !pastPlanLoaded && Object.keys(canvassDays).length) {
+    document.getElementById('past-groups').innerHTML = '<div style="color:var(--subtle);font-size:13px;padding:8px;">Loading past shifts…</div>';
+    loadPlanningStatus(true).then(function(){ renderShifts(); });
+  }
   document.getElementById('view-upcoming').style.display = view==='upcoming' ? '' : 'none';
   document.getElementById('view-past').style.display = view==='past' ? '' : 'none';
   document.getElementById('view-toggle-upcoming').classList.toggle('active', view==='upcoming');
@@ -474,7 +484,7 @@ function renderShifts() {
 
   renderGroupSection(document.getElementById('upcoming-scheduled-groups'), 'up-sched', upScheduled);
   renderGroupSection(document.getElementById('upcoming-anytime-groups'), 'up-any', upAnytime);
-  renderGroupSection(document.getElementById('past-groups'), 'past', past);
+  if (pastPlanLoaded) renderGroupSection(document.getElementById('past-groups'), 'past', past);   // not drawn until its route data is loaded
 
   document.getElementById('upcoming-scheduled-count').textContent = upScheduled.length ? '('+upScheduled.length+')' : '';
   document.getElementById('upcoming-anytime-count').textContent = upAnytime.length ? '('+upAnytime.length+')' : '';

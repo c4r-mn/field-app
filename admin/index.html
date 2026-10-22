@@ -68,6 +68,7 @@
     <div id="stat-note" style="font-size:12px;color:var(--subtle);margin:-8px 0 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
       <span id="stat-asof">Totals not loaded yet.</span>
       <button class="btn btn-ghost btn-sm" id="stat-refresh" onclick="refreshStats()">Load totals</button>
+      <button class="btn btn-ghost btn-sm" onclick="c4rClearCache().then(function(){location.reload();})" title="Forget saved shift data in this browser and re-download it">Clear saved data</button>
     </div>
 
     <!-- Mini field map -->
@@ -117,6 +118,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.20/leaflet-maplibre-gl.js"></script>
 <script src="/field-app/js/firebase.js"></script>
+<script src="/field-app/js/cache.js"></script>
 <script src="/field-app/js/auth.js"></script>
 <script src="/field-app/js/data.js"></script>
 <script>
@@ -136,7 +138,7 @@ initAuth(
 function loadDashboard() {
   setFbBase();
   // Load roster and shifts in parallel
-  Promise.all([fbGet('/roster'), fbGet('/canvass-days')]).then(function(results) {
+  Promise.all([fbGetTTL('/roster', 120000), fbGetTTL('/canvass-days', 120000)]).then(function(results) {
     roster = results[0] || {};
     canvassDays = results[1] || {};
     renderShifts();
@@ -153,7 +155,7 @@ var _allLogsPromise = null;
 function loadAllLogs() {
   if (!_allLogsPromise) {
     _allLogsPromise = Promise.all((window.NEIGHBORHOODS||[]).map(function(n){
-      return fbGet('/'+n.key+'/logs').catch(function(){return null;}).then(function(d){ return [n.key, d]; });
+      return fbHoodLogs(n.key, canvassDays).catch(function(){return null;}).then(function(d){ return [n.key, d]; });
     })).then(function(pairs){ var o = {}; pairs.forEach(function(p){ o[p[0]] = p[1]; }); return o; });
   }
   return _allLogsPromise;
@@ -223,6 +225,7 @@ function loadStats() {
 function refreshStats() {
   var btn = document.getElementById('stat-refresh');
   btn.disabled = true; btn.textContent = 'Loading…';
+  _allLogsPromise = null;
   loadAllLogs().then(function(byHood) {
     var st = {doors:0, accepted:0, contact:0, signs:0, nosolic:0, at: Date.now()};
     Object.values(byHood).forEach(function(hoodLogs) {
@@ -336,8 +339,8 @@ function fetchSummaryRow(key) {
   var day = canvassDays[key], hoods = shiftHoods(day);
   return Promise.all(hoods.map(function(hk){
     return Promise.all([
-      fbGet('/'+hk+'/assignments/'+key).catch(function(){return null;}),
-      fbGet('/'+hk+'/logs/'+key).catch(function(){return null;})
+      fbGetShiftCached(hk,'assignments',key,canvassDays).catch(function(){return null;}),
+      fbGetShiftCached(hk,'logs',key,canvassDays).catch(function(){return null;})
     ]);
   })).then(function(per) {
     var planned = {}, logged = {}, res = {}, latest = '';
