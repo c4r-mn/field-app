@@ -101,17 +101,20 @@ function fbShiftKeys(hood, node) {
 // Anything not cached is fetched: in one bulk request when many shifts are missing
 // (first visit), otherwise shift by shift. Bulk results are split into per-shift
 // cache entries so later visits only need the new/open shifts.
-function fbHoodLogs(hood, days) {
+function fbHoodLogs(hood, days, maxAgeMs) {
   return fbShiftKeys(hood, 'logs').then(function(keys) {
+    keys.sort();   // same order Firebase returns a whole tree, so ties between duplicate entries always resolve the same way
     var out = {}, missing = [];
     return Promise.all(keys.map(function(k) {
       var ttl = c4rShiftTTL(k, days);
+      if (ttl && maxAgeMs) ttl = Math.min(ttl, maxAgeMs);
       if (!ttl) { missing.push(k); return null; }
       return c4rCacheGet('/' + hood + '/logs/' + k).then(function(hit) {
         if (hit && Date.now() - hit.t < ttl) { if (hit.v) out[k] = hit.v; } else missing.push(k);
       });
     })).then(function() {
-      if (!missing.length) return out;
+      function ordered() { var o = {}; keys.forEach(function(k){ if (out[k]) o[k] = out[k]; }); return o; }
+      if (!missing.length) return ordered();
       if (missing.length > 8) {
         return fbGet('/' + hood + '/logs').then(function(all) {
           all = all || {};
@@ -119,12 +122,12 @@ function fbHoodLogs(hood, days) {
             out[k] = all[k];
             if (c4rShiftTTL(k, days)) c4rCacheSet('/' + hood + '/logs/' + k, all[k]);
           });
-          return out;
+          return ordered();
         });
       }
       return Promise.all(missing.map(function(k) {
         return fbGetShiftCached(hood, 'logs', k, days).then(function(d) { if (d) out[k] = d; });
-      })).then(function() { return out; });
+      })).then(function() { return ordered(); });
     });
   });
 }
