@@ -140,6 +140,7 @@
 <script>
 var fieldMap = null;
 var allLogs = {};
+var logCopies = {};   // addrId -> every stored copy of that door's log (see ingestHood)
 var allAssigned = {};
 var upcomingAssigned = {};
 var canvassDays = {};
@@ -247,14 +248,7 @@ function bulkUndoLetterSent() {
   var dateLabel = activeDate === 'all' ? 'all dates' : (activeDate === 'anytime' ? 'No Specific Date' : activeDate);
   if (!confirm('Undo Letter Sent on '+candidates.length+' address'+(candidates.length===1?'':'es')+' in '+hoodLabel+' ('+dateLabel+')? The original contact result is not affected — this only clears the letter-sent flag.')) return;
 
-  var writes = candidates.map(function(addrId){
-    var log = allLogs[addrId];
-    var path = '/'+log.hoodKey+'/logs/'+log.date+'/'+log.volId+'/'+addrId;
-    // fbPatch only touches the letterSent field — notes/contact/names are untouched
-    return fbPatch(path, {letterSent: false}).then(function(){
-      log.letterSent = false;
-    });
-  });
+  var writes = candidates.map(function(addrId){ return writeLetterFlag(addrId, false); });   // flag only; notes/contact/names untouched
 
   Promise.all(writes).then(function(){
     showToast('Undid Letter Sent on '+candidates.length+' address'+(candidates.length===1?'':'es'));
@@ -283,14 +277,7 @@ function bulkMarkLetterSent() {
   var dateLabel = activeDate === 'all' ? 'all dates' : (activeDate === 'anytime' ? 'No Specific Date' : activeDate);
   if (!confirm('Mark '+candidates.length+' address'+(candidates.length===1?'':'es')+' in '+hoodLabel+' ('+dateLabel+') as Letter Sent? The original contact result stays — this just adds a letter-sent record on top.')) return;
 
-  var writes = candidates.map(function(addrId){
-    var log = allLogs[addrId];
-    var updated = Object.assign({}, log, {letterSent: true});
-    var path = '/'+log.hoodKey+'/logs/'+log.date+'/'+log.volId+'/'+addrId;
-    return fbPut(path, updated).then(function(){
-      allLogs[addrId] = updated;
-    });
-  });
+  var writes = candidates.map(function(addrId){ return writeLetterFlag(addrId, true); });
 
   Promise.all(writes).then(function(){
     showToast('Marked '+candidates.length+' address'+(candidates.length===1?'':'es')+' as Letter Sent');
@@ -321,8 +308,12 @@ function saveFvEdit() {
   });
 
   var path = '/'+log.hoodKey+'/logs/'+log.date+'/'+log.volId+'/'+fvEditAddrId;
-  fbPut(path, updated).then(function(){
-    allLogs[fvEditAddrId] = updated;
+  var editedId = fvEditAddrId;
+  fbPut(path, updated).then(function(r){
+    if (r && r.ok === false) throw new Error('rejected');
+    allLogs[editedId] = updated;
+    if (updated.letterSent !== !!log.letterSent && LETTER_ELIGIBLE.indexOf(updated.contact) !== -1) return writeLetterFlag(editedId, updated.letterSent);
+  }).then(function(){
     showToast('Saved');
     closeFvEdit();
     refreshFieldMarkers();
@@ -335,6 +326,25 @@ initAuth(
 );
 
 var loadedHoods = {};
+// A door counts as letter-sent if any stored copy with the same result says so.
+function syncLetterFlags() {
+  Object.keys(allLogs).forEach(function(id) {
+    var log = allLogs[id];
+    if (!log || log.letterSent) return;
+    if ((logCopies[id]||[]).some(function(c){ return c.letterSent && c.contact === log.contact; })) log.letterSent = true;
+  });
+}
+// Writes the letter flag to every stored copy of the door (flag only — nothing else is touched).
+function writeLetterFlag(addrId, flag) {
+  var log = allLogs[addrId], copies = (logCopies[addrId]||[]).filter(function(c){ return c.contact === log.contact; });
+  if (!copies.length) copies = [{hoodKey:log.hoodKey, date:log.date, volId:log.volId}];
+  return Promise.all(copies.map(function(c) {
+    return fbPatch('/'+c.hoodKey+'/logs/'+c.date+'/'+c.volId+'/'+addrId, {letterSent: flag}).then(function(r) {
+      if (r && r.ok === false) throw new Error('write rejected');
+      c.letterSent = flag;
+    });
+  })).then(function(){ log.letterSent = flag; });
+}
 function ingestHood(hood) {
       var logs = hood.logs || {};
       var assigns = hood.assignments || {};
@@ -346,7 +356,13 @@ function ingestHood(hood) {
           if (!addrLogs) return;
           Object.entries(addrLogs).forEach(function(pair) {
             var addrId = pair[0], log = pair[1];
-            if (!allLogs[addrId] || (log.time||'') > (allLogs[addrId].time||'')) {
+            if (!log) return;
+            // The same door can be logged more than once (e.g. a shift that was later
+            // merged/rescheduled leaves a copy under each shift). Keep every copy so a
+            // letter flag set on one is honored, and so marking updates all of them.
+            (logCopies[addrId] = logCopies[addrId] || []).push({hoodKey:hood.key, date:date, volId:volId, contact:log.contact, letterSent:!!log.letterSent});
+            var cur = allLogs[addrId], t = log.time||'', ct = cur ? (cur.time||'') : '';
+            if (!cur || t > ct || (t === ct && log.letterSent && !cur.letterSent)) {
               allLogs[addrId] = Object.assign({}, log, {date:date, volId:volId, hoodKey:hood.key});
             }
           });
@@ -373,13 +389,13 @@ function ensureHoodsLoaded(keys) {
   todo.forEach(function(k){ loadedHoods[k] = true; });
   return Promise.all(todo.map(function(k) {
     return Promise.all([
-      fbHoodLogs(k, canvassDays),
+      fbHoodLogs(k, canvassDays, 20*60*1000),
       fbShiftKeys(k, 'assignments').then(function(ak) {
         var upcoming = ak.filter(function(d){ return baseShiftDate(d) >= today; });   // past routes are never "upcoming"
         var out = {};
         return Promise.all(upcoming.map(function(d){ return fbGet('/'+k+'/assignments/'+d).then(function(v){ if (v) out[d] = v; }); })).then(function(){ return out; });
       })
-    ]).then(function(r){ ingestHood({key:k, logs:r[0], assignments:r[1]}); })
+    ]).then(function(r){ ingestHood({key:k, logs:r[0], assignments:r[1]}); syncLetterFlags(); })
       .catch(function(e){ loadedHoods[k] = false; throw e; });
   })).then(function() {
     buildDateOptions();
