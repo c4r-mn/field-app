@@ -683,12 +683,15 @@ function groupCentroid(units) {
   return {lat: lat, lng: lng};
 }
 
+// A complex can be stored as one record with a `units` count instead of one record per unit.
+function unitWeight(u) { return u.units || 1; }
+function sumUnits(arr) { return arr.reduce(function(t,u){ return t + unitWeight(u); }, 0); }
 function renderBuildingMarker(units, centroid) {
   var first = units[0];
   var pos = centroid || {lat: first.lat, lng: first.lng};
-  var unitCount = units.length;
+  var unitCount = sumUnits(units);
   var loggedUnits = units.filter(function(u){ return !!allLogs[u.id]; });
-  var loggedCount = loggedUnits.length;
+  var loggedCount = sumUnits(loggedUnits);
 
   var color, opacity;
   if (loggedCount === 0) { color = '#e0ddd3'; opacity = .6; }
@@ -731,16 +734,16 @@ function renderBuildingMarker(units, centroid) {
 function openMeetGreet(buildingKey) {
   var units = buildingUnitsStore[buildingKey];
   if (!units || !units.length) return;
-  var first = units[0];
-  var label = (first.name?first.name+' — ':'')+first.n+' '+first.s+' ('+units.length+' units)';
+  var first = units[0], totalUnits = sumUnits(units);
+  var label = (first.name?first.name+' — ':'')+first.n+' '+first.s+' ('+totalUnits+' units)';
   var today = new Date();
   var todayStr = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
 
-  var dateInput = prompt('Log a Meet & Greet for ALL '+units.length+' units at '+label+'.\n\nEvery unit will be marked Accepted.\n\nEvent date (YYYY-MM-DD):', todayStr);
+  var dateInput = prompt('Log a Meet & Greet for ALL '+totalUnits+' units at '+label+'.\n\nEvery unit will be marked Accepted.\n\nEvent date (YYYY-MM-DD):', todayStr);
   if (!dateInput) return;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) { showToast('Enter date as YYYY-MM-DD'); return; }
 
-  if (!confirm('Mark all '+units.length+' units at '+label+' as Accepted for '+dateInput+'? This cannot be easily undone in bulk.')) return;
+  if (!confirm('Mark all '+totalUnits+' units at '+label+' as Accepted for '+dateInput+'? This cannot be easily undone in bulk.')) return;
 
   var hoodKey = first.hoodKey;
   var nowIso = new Date().toISOString();
@@ -765,7 +768,7 @@ function openMeetGreet(buildingKey) {
   });
 
   Promise.all(writes).then(function(){
-    showToast('Logged Meet & Greet for '+units.length+' units');
+    showToast('Logged Meet & Greet for '+totalUnits+' units');
     refreshFieldMarkers();
   }).catch(function(){
     showToast('Some units failed to save — please check and retry');
